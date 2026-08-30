@@ -1,0 +1,29 @@
+{% extends "base_faculty.html" %}
+{% block title %}Profile{% endblock %}
+{% block content %}
+<div class="screen-title"><h2>Profile</h2></div>
+
+{% if ok %}<p class="notice-ok">PIN updated.</p>{% endif %}
+{% if err %}<p class="error">{{ err }}</p>{% endif %}
+
+<div class="card" style="text-align:center">
+  <div class="avatar lg" style="margin:0 auto 10px">{{ (u.display_name or 'U')[:1] }}</div>
+  <strong style="font-size:17px">{{ u.display_name }}</strong>
+  <div class="muted tiny">@{{ u.username }}</div>
+  <div class="muted" style="margin-top:8px">{{ u.department or '—' }}</div>
+  <div class="muted tiny">{{ u.contact or 'No contact on file' }}</div>
+</div>
+
+<h3>Change PIN</h3>
+<div class="card">
+  <form method="post" action="/profile/pin">
+    <label for="current">Current PIN</label>
+    <input id="current" name="current" type="password" inputmode="numeric" required>
+    <label for="new">New PIN (4–8 digits)</label>
+    <input id="new" name="new" type="password" inputmode="numeric" pattern="\d{4,8}" required>
+    <p style="margin-top:14px"><button class="btn" type="submit">Update PIN</button></p>
+  </form>
+</div>
+
+<a class="btn ghost" href="/logout">Log out</a>
+{% endblock %}

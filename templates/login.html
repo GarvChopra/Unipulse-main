@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0e2f5c">
+  <title>Sign in &middot; UniPulse</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body>
+<div class="auth-wrap">
+  <div class="auth-hero">
+    <img src="{{ url_for('static', filename='img/glb-logo.webp') }}" alt="GL Bajaj">
+    <b id="brandline">UniPulse</b>
+    <span>GL Bajaj Institute of Technology &amp; Management</span>
+  </div>
+
+  <div class="auth-card" style="max-width:440px;margin:0 auto">
+    <h1 id="welcome">Welcome back</h1>
+    <p class="sub" id="portal">Campus Grievance &amp; Infrastructure Portal</p>
+
+    <div class="seg" role="tablist">
+      <button type="button" class="on" id="seg-faculty" onclick="segTo('faculty')">Faculty / Staff</button>
+      <button type="button" id="seg-admin" onclick="segTo('admin')">Admin</button>
+    </div>
+
+    {% if error %}<p class="error" style="margin-bottom:12px">{{ error }}</p>{% endif %}
+
+    <form method="post" action="/login">
+      <label for="username" id="ul">Username</label>
+      <input id="username" name="username" autocomplete="username" required placeholder="prof.name">
+      <label for="pin">PIN</label>
+      <input id="pin" name="pin" type="password" inputmode="numeric"
+             autocomplete="current-password" required placeholder="••••">
+      <label class="check"><input type="checkbox" name="remember" value="1"> Remember me on this device</label>
+      <p style="margin-top:18px"><button type="submit" class="btn">Sign in</button></p>
+    </form>
+
+    <p class="tiny muted" id="hint" style="text-align:center;margin-top:14px">
+      Faculty accounts are created by the campus admin.</p>
+  </div>
+
+  <p class="auth-foot">Together for a cleaner, safer &amp; smarter GL Bajaj campus</p>
+</div>
+<script>
+function segTo(w){
+  const admin = w === 'admin';
+  document.getElementById('seg-faculty').classList.toggle('on', !admin);
+  document.getElementById('seg-admin').classList.toggle('on', admin);
+  document.body.classList.toggle('admin-login', admin);
+  document.getElementById('brandline').textContent = admin ? 'UniPulse Admin' : 'UniPulse';
+  document.getElementById('welcome').textContent = admin ? 'Admin sign-in' : 'Welcome back';
+  document.getElementById('portal').textContent = admin
+    ? 'Campus Super Admin Portal' : 'Campus Grievance & Infrastructure Portal';
+  document.getElementById('ul').textContent = admin ? 'Admin ID' : 'Username';
+  document.getElementById('username').placeholder = admin ? 'admin' : 'prof.name';
+  document.getElementById('hint').textContent = admin
+    ? 'Secure · Transparent · Efficient' : 'Faculty accounts are created by the campus admin.';
+}
+</script>
+</body>
+</html>

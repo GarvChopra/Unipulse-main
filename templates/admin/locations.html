@@ -1,0 +1,31 @@
+{% extends "base_admin.html" %}
+{% block title %}Locations{% endblock %}
+{% block content %}
+<h1 class="a-h2">Campus Locations</h1>
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+<div class="crud-form">
+  <h4 style="margin:0 0 8px">Add location</h4>
+  <form method="post" action="/admin/locations">
+    <select name="location_type">
+      <option value="block">Academics block</option>
+      <option value="floor">Academics floor</option>
+      <option value="subzone">Outer Area sub-zone</option></select>
+    <input name="name" placeholder="Name e.g. Block E" required style="margin-top:8px">
+    <p style="margin:12px 0 0"><button class="btn" type="submit">Add</button></p>
+  </form>
+</div>
+
+<div class="loc-tree">
+  {% for l in locations %}
+  <div class="loc-row {{ 'child' if l.location_type in ('block','floor','subzone') }}">
+    <span>{{ l.name }}</span>
+    <span class="muted tiny" style="margin-left:8px">{{ l.location_type }}</span>
+    <form method="post" action="/admin/locations/{{ l.id }}/toggle" class="off" style="border:0;background:transparent;padding:0">
+      <button type="submit" style="border:0;background:transparent;color:var(--faint);font-size:11px;font-weight:700;padding:0">
+        {{ 'disable' if l.is_active else 'enable' }}</button>
+    </form>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

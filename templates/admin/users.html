@@ -1,0 +1,36 @@
+{% extends "base_admin.html" %}
+{% block title %}Faculty{% endblock %}
+{% block content %}
+<h1 class="a-h2">Faculty &amp; Accounts</h1>
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+<div class="crud-form">
+  <h4 style="margin:0 0 8px">Create account</h4>
+  <form method="post" action="/admin/users">
+    <input name="username" placeholder="username" required>
+    <input name="display_name" placeholder="Display name" required style="margin-top:8px">
+    <input name="department" placeholder="Department" style="margin-top:8px">
+    <input name="pin" placeholder="Initial PIN" required style="margin-top:8px">
+    <select name="role" style="margin-top:8px">
+      <option value="reporter">Faculty (reporter)</option><option value="admin">Admin</option></select>
+    <p style="margin:12px 0 0"><button class="btn" type="submit">Create account</button></p>
+  </form>
+</div>
+
+{% for u in users %}
+<div class="notice-card">
+  <div class="card-row">
+    <div><span class="t">{{ u.display_name }}</span>
+      <div class="muted tiny">@{{ u.username }} · {{ u.role }} · {{ u.department or '—' }}</div></div>
+    <span class="{{ 'badge-active' if u.is_active else 'badge-draft' }}">{{ 'Active' if u.is_active else 'Inactive' }}</span>
+  </div>
+  <div class="act-row" style="margin-top:10px">
+    <form method="post" action="/admin/users/{{ u.id }}/toggle" style="flex:1">
+      <button class="btn ghost sm" type="submit" style="width:100%">{{ 'Deactivate' if u.is_active else 'Activate' }}</button></form>
+    <form method="post" action="/admin/users/{{ u.id }}/pin" style="flex:1;display:flex;gap:6px">
+      <input name="pin" placeholder="new PIN" style="flex:1">
+      <button class="btn ghost sm" type="submit">Reset</button></form>
+  </div>
+</div>
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,26 @@
+{% extends "base_admin.html" %}
+{% block title %}Queue{% endblock %}
+{% block content %}
+<h1 class="a-h2">Grievance Queue</h1>
+
+<div class="filter-bar">
+  <input id="f-search" placeholder="Search code / keyword…">
+  <div class="row">
+    <select id="f-status"><option value="">Any status</option>
+      {% for s in statuses %}<option>{{ s }}</option>{% endfor %}</select>
+    <select id="f-category"><option value="">Any category</option>
+      {% for c in categories %}<option>{{ c }}</option>{% endfor %}</select>
+  </div>
+  <div class="row">
+    <select id="f-unit"><option value="">Any unit</option>
+      {% for u in units %}<option>{{ u }}</option>{% endfor %}</select>
+    <select id="f-loc"><option value="">Any location</option>
+      {% for t in location_types %}<option value="{{ t.key }}">{{ t.name }}</option>{% endfor %}</select>
+    <select id="f-sort"><option value="priority">Priority</option>
+      <option value="created">Newest</option><option value="due">Due date</option></select>
+  </div>
+</div>
+
+<div id="rows"><p class="a-sub">Loading…</p></div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/admin_queue.js') }}"></script>{% endblock %}

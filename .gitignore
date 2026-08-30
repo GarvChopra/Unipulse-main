@@ -1,0 +1,13 @@
+.env
+.env.*
+firebase_key.json
+*serviceaccount*.json
+*service-account*.json
+__pycache__/
+*.pyc
+.pytest_cache/
+AI_AGENT.md
+ARCHITECTURE.md
+ENGINEERING_PROGRESS.md
+MASTER_PROMPT.md
+ROADMAP.md
