@@ -94,7 +94,11 @@ def next_seq(name: str) -> int:
 
 def _init_firestore():
     """Returns a firestore client, or None if not configured / not installed."""
-    b64 = os.environ.get("FIREBASE_CREDENTIALS_B64", "").strip()
+    # "".join(...split()) strips ALL whitespace, including newlines that can get
+    # embedded when a long base64 string is copy-pasted through a terminal or a
+    # web form's textarea — plain .strip() only catches the two ends, which is
+    # not enough if a line-wrap introduced a newline in the middle of the string.
+    b64 = "".join(os.environ.get("FIREBASE_CREDENTIALS_B64", "").split())
     if not b64 or not _FS_OK:
         return None
     try:
