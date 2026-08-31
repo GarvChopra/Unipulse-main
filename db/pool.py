@@ -92,18 +92,29 @@ def next_seq(name: str) -> int:
 
 # ---------------------------------------------------------------- Firestore --
 
+def _load_credentials_dict():
+    """Try the raw-JSON env var first (simplest — no encoding step, and Render's
+    value field is a textarea so multi-line JSON pastes fine). Fall back to the
+    base64 var for setups that prefer a single-line value."""
+    raw_json = os.environ.get("FIREBASE_KEY_JSON", "").strip()
+    if raw_json:
+        return json.loads(raw_json)
+
+    b64 = "".join(os.environ.get("FIREBASE_CREDENTIALS_B64", "").split())
+    if b64:
+        return json.loads(base64.b64decode(b64))
+
+    return None
+
+
 def _init_firestore():
     """Returns a firestore client, or None if not configured / not installed."""
-    # "".join(...split()) strips ALL whitespace, including newlines that can get
-    # embedded when a long base64 string is copy-pasted through a terminal or a
-    # web form's textarea — plain .strip() only catches the two ends, which is
-    # not enough if a line-wrap introduced a newline in the middle of the string.
-    b64 = "".join(os.environ.get("FIREBASE_CREDENTIALS_B64", "").split())
-    if not b64 or not _FS_OK:
+    if not _FS_OK:
         return None
     try:
-        raw = base64.b64decode(b64)
-        cred_dict = json.loads(raw)
+        cred_dict = _load_credentials_dict()
+        if not cred_dict:
+            return None
         if not firebase_admin._apps:
             cred = credentials.Certificate(cred_dict)
             firebase_admin.initialize_app(cred)
