@@ -10,8 +10,16 @@ def test_service_worker_has_offline_fallback(client):
     assert 'req.mode === "navigate"' in sw
 
 
-def test_base_page_has_install_button(client):
+def test_login_page_has_install_modal(client):
+    r = client.get("/login")
+    assert r.status_code == 200
+    assert b'id="pwa-install-modal"' in r.data
+    assert b"beforeinstallprompt" in r.data
+    assert b"Android app coming soon" in r.data
+    assert b"install instantly" in r.data.lower()
+
+
+def test_home_page_has_no_floating_install_button(client):
     client.post("/login", data={"username": "prof.rao", "pin": "1234"})
     r = client.get("/")
-    assert b"beforeinstallprompt" in r.data
-    assert b'id="pwa-install"' in r.data
+    assert b'id="pwa-install"' not in r.data

@@ -226,6 +226,24 @@ img.evidence{max-width:100%;border-radius:var(--r-sm);border:1px solid var(--lin
 .seg button.on{background:#fff;color:var(--navy);box-shadow:var(--shadow-sm)}
 .auth-foot{text-align:center;color:var(--faint);font-size:12px;margin:16px 0 26px}
 
+/* pwa install modal (login) */
+.pwa-modal{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;
+  padding:20px;background:rgba(12,22,38,.55);backdrop-filter:blur(2px)}
+.pwa-modal__card{background:#fff;border-radius:var(--r);width:100%;max-width:420px;
+  padding:20px 20px 16px;box-shadow:0 18px 50px rgba(12,22,38,.35);position:relative}
+.pwa-modal__x{position:absolute;top:10px;right:10px;width:32px;height:32px;border:0;border-radius:9px;
+  background:var(--navy-soft);color:var(--navy);font-size:18px;line-height:1;cursor:pointer}
+.pwa-modal__id{display:flex;align-items:center;gap:11px;margin-bottom:16px}
+.pwa-modal__id img{width:40px;height:40px;object-fit:contain;border-radius:10px;background:var(--navy-soft);padding:5px}
+.pwa-modal__id b{display:block;font-size:14px;color:var(--navy)}
+.pwa-modal__id span{display:block;font-size:12px;color:var(--muted)}
+.pwa-modal .btn[disabled]{background:var(--navy-soft);color:var(--faint)}
+.pwa-modal__hint{text-align:center;color:var(--muted);font-size:12px;margin:8px 0 10px}
+.pwa-modal__steps{font-size:13px;color:var(--ink);line-height:1.5;margin:6px 0 4px}
+.pwa-modal__foot{text-align:center;margin-top:14px}
+.pwa-modal__foot button{border:0;background:transparent;color:var(--green);font:inherit;font-size:12.5px;
+  font-weight:700;cursor:pointer}
+
 @media(min-width:640px){ body{background:var(--bg)} }
 :focus-visible{outline:3px solid var(--green);outline-offset:2px}
 [hidden]{display:none!important}

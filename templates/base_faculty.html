@@ -40,23 +40,10 @@
   </nav>
   {% endif %}
 
-  {% if request.path == '/' %}
-  <button id="pwa-install" hidden class="btn sm navy" style="position:fixed;right:14px;bottom:78px;width:auto">Install app</button>
-  {% endif %}
   <script>
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("{{ url_for('static', filename='service-worker.js') }}");
     }
-    let _deferredPrompt = null;
-    window.addEventListener("beforeinstallprompt", (e) => {
-      e.preventDefault(); _deferredPrompt = e;
-      const b = document.getElementById("pwa-install"); if (b) b.hidden = false;
-    });
-    const _ib = document.getElementById("pwa-install");
-    if (_ib) _ib.addEventListener("click", async () => {
-      _ib.hidden = true;
-      if (_deferredPrompt) { _deferredPrompt.prompt(); _deferredPrompt = null; }
-    });
   </script>
   {% block scripts %}{% endblock %}
 </body>
