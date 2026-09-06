@@ -48,6 +48,42 @@ Demo/sample data is never seeded into a production database unless
 gunicorn wsgi:app             # see Procfile
 ```
 
+### Database provider (important on free tiers)
+
+The app connects to Postgres at boot and then acquires a fresh connection per
+request. Providers that **auto-suspend an idle database** are a bad fit: a
+low-traffic pilot is idle most of the time, so nearly every request pays a
+cold-start and many time out (`psycopg_pool.PoolTimeout`), which surfaces as
+intermittent HTTP 500s and reports that never reach the admin queue.
+
+- **Neon free tier** suspends compute after ~5 minutes idle and caps monthly
+  compute hours — avoid for a live deployment.
+- **Supabase free tier** stays warm (pauses only after ~7 days of *zero*
+  activity) and has no compute-hour cap — recommended. This app is a persistent
+  gunicorn server with its own connection pool, so use the **Session pooler**
+  string (host `aws-0-<region>.pooler.supabase.com`, port `5432`, user
+  `postgres.<project-ref>`) and append `?sslmode=require`. (The Transaction
+  pooler on `6543` also works — the pool sets `prepare_threshold=None`.)
+- A small **always-on paid instance** (Render/Neon/Supabase, ~$7/mo) is the
+  robust option once the pilot proves out.
+
+### Deploy on Render (checklist)
+
+Set these in the Render dashboard → service → **Environment** (never commit a
+`.env`):
+
+| Var | Value |
+|---|---|
+| `APP_ENV` | `production` |
+| `DATABASE_URL` | Supabase session-pooler URL (port `5432`) + `?sslmode=require` |
+| `SECRET_KEY` | 40+ random chars |
+| `JWT_SECRET` | 40+ random chars (different from `SECRET_KEY`) |
+| `INITIAL_ADMIN_USERNAME` / `INITIAL_ADMIN_PIN` | first deploy only; PIN must be changed on first login |
+| `GROQ_API_KEY`, `RESEND_API_KEY`, `RESEND_FROM` | as before |
+
+Tables and the GL Bajaj location tree are created automatically on first boot.
+Confirm success in the logs: `UNIFIX starting — env=production, db=postgres`.
+
 ## Accounts
 
 **Development** seeds these automatically:

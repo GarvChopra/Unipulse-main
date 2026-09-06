@@ -198,14 +198,14 @@ def _try_postgres() -> bool:
     for attempt in range(1, 4):
         try:
             STATE["pg_pool"] = ConnectionPool(
-                dsn, min_size=0, max_size=2, open=True, timeout=10,
+                dsn, min_size=0, max_size=5, open=True, timeout=20,
                 max_idle=120, max_lifetime=600,
-                kwargs={"connect_timeout": 5, "keepalives": 1,
+                kwargs={"connect_timeout": 10, "keepalives": 1,
                         "keepalives_idle": 30, "keepalives_interval": 5,
                         "keepalives_count": 3, "prepare_threshold": None},
                 check=ConnectionPool.check_connection,
             )
-            with STATE["pg_pool"].connection(timeout=10) as conn:
+            with STATE["pg_pool"].connection(timeout=20) as conn:
                 schema.ensure(conn)
                 with conn.cursor() as cur:
                     cur.execute("SELECT 1")
