@@ -12,6 +12,13 @@ CONTACT_EMAIL = os.environ.get("PRIVACY_CONTACT_EMAIL", "").strip() \
     or f"unifix@{GLB['email_domain']}"
 
 
+@bp.get("/get-app")
+def get_app():
+    """Standalone install page. Public (no login) so its URL can be shared as a
+    QR code. 'Install instantly' fires the PWA beforeinstallprompt."""
+    return render_template("public/get_app.html", contact=CONTACT_EMAIL, glb=GLB)
+
+
 @bp.get("/privacy")
 def privacy():
     return render_template("public/privacy.html", contact=CONTACT_EMAIL, glb=GLB)
