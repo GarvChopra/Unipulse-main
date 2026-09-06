@@ -27,11 +27,21 @@ log = logging.getLogger("unifix.db")
 _PG_OK = False
 try:
     import psycopg
-    from psycopg_pool import ConnectionPool
     _PG_OK = True
 except ImportError:
     psycopg = None
-    ConnectionPool = None
+
+# Short-lived connections, opened per db call. We deliberately do NOT use
+# psycopg_pool: its background connection-opener threads proved unreliable under
+# gunicorn on the deploy host (Render) — boot connected fine, then every request
+# timed out in ConnectionPool.getconn(). The pooling that matters is done
+# server-side by Supabase's Supavisor (the pooler host in DATABASE_URL).
+# prepare_threshold=None is required when DATABASE_URL points at the transaction
+# pooler (port 6543) and harmless on the session pooler (5432) / a direct DSN.
+_CONNECT_KWARGS = dict(
+    connect_timeout=10, prepare_threshold=None,
+    keepalives=1, keepalives_idle=30, keepalives_interval=5, keepalives_count=3,
+)
 
 _FS_OK = False
 try:
@@ -59,12 +69,11 @@ _ID_SEQ_NAME = {
     "audit_log": "audit",
 }
 
-STATE = {"mode": "memory", "pg_pool": None, "mem": {}, "seq": {}, "firestore_db": None}
+STATE = {"mode": "memory", "mem": {}, "seq": {}, "firestore_db": None}
 
 
 def reset_memory_store() -> None:
     STATE["mode"] = "memory"
-    STATE["pg_pool"] = None
     STATE["mem"] = {t: [] for t in _MEM_TABLES}
     STATE["seq"] = {}
     STATE["firestore_db"] = None
@@ -82,10 +91,21 @@ def is_firestore() -> bool:
 
 @contextmanager
 def connection():
-    if STATE["mode"] != "postgres" or not STATE["pg_pool"]:
+    """A short-lived psycopg connection, closed when the caller is done.
+
+    Callers `conn.commit()` explicitly after writes (unchanged); an
+    uncommitted transaction is rolled back by `conn.close()`.
+    """
+    if STATE["mode"] != "postgres":
         raise RuntimeError("pool.connection() called outside postgres mode")
-    with STATE["pg_pool"].connection() as conn:
+    conn = psycopg.connect(Config.DATABASE_URL, **_CONNECT_KWARGS)
+    try:
         yield conn
+    finally:
+        try:
+            conn.close()
+        except Exception:  # noqa: BLE001
+            pass
 
 
 def next_seq(name: str) -> int:
@@ -197,15 +217,7 @@ def _try_postgres() -> bool:
 
     for attempt in range(1, 4):
         try:
-            STATE["pg_pool"] = ConnectionPool(
-                dsn, min_size=0, max_size=5, open=True, timeout=20,
-                max_idle=120, max_lifetime=600,
-                kwargs={"connect_timeout": 10, "keepalives": 1,
-                        "keepalives_idle": 30, "keepalives_interval": 5,
-                        "keepalives_count": 3, "prepare_threshold": None},
-                check=ConnectionPool.check_connection,
-            )
-            with STATE["pg_pool"].connection(timeout=20) as conn:
+            with psycopg.connect(dsn, **_CONNECT_KWARGS) as conn:
                 schema.ensure(conn)
                 with conn.cursor() as cur:
                     cur.execute("SELECT 1")
@@ -216,12 +228,6 @@ def _try_postgres() -> bool:
         except Exception as e:  # noqa: BLE001
             log.warning("PostgreSQL attempt %d/3 failed: %s: %s",
                         attempt, type(e).__name__, e)
-            if STATE["pg_pool"]:
-                try:
-                    STATE["pg_pool"].close(timeout=2)
-                except Exception:  # noqa: BLE001
-                    pass
-                STATE["pg_pool"] = None
             if attempt < 3:
                 time.sleep(3)
     return False

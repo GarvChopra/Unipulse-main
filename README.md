@@ -48,24 +48,29 @@ Demo/sample data is never seeded into a production database unless
 gunicorn wsgi:app             # see Procfile
 ```
 
-### Database provider (important on free tiers)
+### Database (Postgres)
 
-The app connects to Postgres at boot and then acquires a fresh connection per
-request. Providers that **auto-suspend an idle database** are a bad fit: a
-low-traffic pilot is idle most of the time, so nearly every request pays a
-cold-start and many time out (`psycopg_pool.PoolTimeout`), which surfaces as
-intermittent HTTP 500s and reports that never reach the admin queue.
+`db/pool.py` opens a **short-lived psycopg connection per db call** and closes
+it — there is no client-side connection pool. (psycopg_pool's background
+connection-opener threads proved unreliable under gunicorn on Render: boot
+connected fine, then every request timed out in `getconn()`.) Connection
+pooling is delegated to the database side.
 
-- **Neon free tier** suspends compute after ~5 minutes idle and caps monthly
-  compute hours — avoid for a live deployment.
-- **Supabase free tier** stays warm (pauses only after ~7 days of *zero*
-  activity) and has no compute-hour cap — recommended. This app is a persistent
-  gunicorn server with its own connection pool, so use the **Session pooler**
-  string (host `aws-0-<region>.pooler.supabase.com`, port `5432`, user
-  `postgres.<project-ref>`) and append `?sslmode=require`. (The Transaction
-  pooler on `6543` also works — the pool sets `prepare_threshold=None`.)
-- A small **always-on paid instance** (Render/Neon/Supabase, ~$7/mo) is the
-  robust option once the pilot proves out.
+- **Use a managed pooler in front of Postgres.** With Supabase, point
+  `DATABASE_URL` at the **pooler host** (`aws-0-<region>.pooler.supabase.com`,
+  user `postgres.<project-ref>`), not the direct `db.<ref>.supabase.co` host
+  (which is IPv6-only on the free tier). Session pooler `5432` or transaction
+  pooler `6543` both work — the code sets `prepare_threshold=None`. Append
+  `?sslmode=require`.
+- **Co-locate the app and the database in the same region.** A cross-continent
+  hop (e.g. app in Render Oregon, DB in Supabase Singapore) adds ~150–200 ms per
+  round trip; a fresh connection needs several, so every request crawls or times
+  out. Match the regions (Render Oregon ↔ Supabase West US).
+- **Neon free tier** additionally suspends compute after ~5 min idle and caps
+  monthly compute hours — avoid for a live deployment. Supabase free stays warm
+  (pauses only after ~7 days of zero activity).
+- A small **always-on paid instance** (~$7/mo) is the robust option once the
+  pilot proves out.
 
 ### Deploy on Render (checklist)
 
@@ -75,7 +80,7 @@ Set these in the Render dashboard → service → **Environment** (never commit 
 | Var | Value |
 |---|---|
 | `APP_ENV` | `production` |
-| `DATABASE_URL` | Supabase session-pooler URL (port `5432`) + `?sslmode=require` |
+| `DATABASE_URL` | Supabase pooler URL (`...pooler.supabase.com`), same region as the Render service, + `?sslmode=require` |
 | `SECRET_KEY` | 40+ random chars |
 | `JWT_SECRET` | 40+ random chars (different from `SECRET_KEY`) |
 | `INITIAL_ADMIN_USERNAME` / `INITIAL_ADMIN_PIN` | first deploy only; PIN must be changed on first login |
