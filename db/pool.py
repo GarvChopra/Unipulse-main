@@ -1,24 +1,65 @@
-"""Persistence backend: PostgreSQL primary, in-memory fallback. Same dict shapes both ways."""
+"""Persistence backend selection.
+
+Order of preference
+------------------
+1. **PostgreSQL** — the primary production datastore. Required in production.
+2. **Firestore** — persistent fallback used only when Postgres is unavailable.
+   (Credential/config wiring is completed in a later phase; the hook is here.)
+3. **In-memory** — development / test convenience ONLY. Never used in
+   production: if production cannot reach Postgres or Firestore, `init_db()`
+   raises and the process exits loudly instead of pretending to work.
+
+Firestore mode reuses the exact in-memory code path in every db/*.py module
+(they all branch on `pool.is_memory()`), loading collections into STATE["mem"]
+at boot and writing back via `flush_to_firestore()`.
+"""
+import base64
+import json
+import logging
+import os
 import time
 from contextlib import contextmanager
 
 from config import Config
 
+log = logging.getLogger("unifix.db")
+
 _PG_OK = False
 try:
-    import psycopg  # noqa: F401
+    import psycopg
     from psycopg_pool import ConnectionPool
     _PG_OK = True
 except ImportError:
     psycopg = None
     ConnectionPool = None
 
+_FS_OK = False
+try:
+    import firebase_admin
+    from firebase_admin import credentials, firestore
+    _FS_OK = True
+except ImportError:
+    firebase_admin = None
+    firestore = None
+
 _MEM_TABLES = (
     "users", "locations", "grievances", "evidence",
     "timeline_events", "recurring_groups", "notices", "audit_log",
 )
 
-STATE = {"mode": "memory", "pg_pool": None, "mem": {}, "seq": {}}
+# table name -> the next_seq() name each db/*.py module actually uses for "id"
+_ID_SEQ_NAME = {
+    "users": "users",
+    "locations": "locations",
+    "grievances": "grievance_id",
+    "evidence": "evidence",
+    "timeline_events": "timeline",
+    "recurring_groups": "recurring",
+    "notices": "notice",
+    "audit_log": "audit",
+}
+
+STATE = {"mode": "memory", "pg_pool": None, "mem": {}, "seq": {}, "firestore_db": None}
 
 
 def reset_memory_store() -> None:
@@ -26,16 +67,23 @@ def reset_memory_store() -> None:
     STATE["pg_pool"] = None
     STATE["mem"] = {t: [] for t in _MEM_TABLES}
     STATE["seq"] = {}
+    STATE["firestore_db"] = None
 
 
 def is_memory() -> bool:
-    return STATE["mode"] == "memory"
+    # Firestore mode is a durable variant of memory mode — same STATE["mem"] shape,
+    # so every db/*.py module's existing memory branch works unchanged.
+    return STATE["mode"] in ("memory", "firestore")
+
+
+def is_firestore() -> bool:
+    return STATE["mode"] == "firestore"
 
 
 @contextmanager
 def connection():
     if STATE["mode"] != "postgres" or not STATE["pg_pool"]:
-        raise RuntimeError("pool.connection() called in memory mode")
+        raise RuntimeError("pool.connection() called outside postgres mode")
     with STATE["pg_pool"].connection() as conn:
         yield conn
 
@@ -53,39 +101,172 @@ def next_seq(name: str) -> int:
     return STATE["seq"][name]
 
 
-def init_db() -> None:
+# ---------------------------------------------------------------- Firestore --
+
+def _load_credentials_dict():
+    """Accept the service-account credentials in any of the common forms:
+    raw JSON in an env var, a base64 blob, or a path to a JSON file
+    (GOOGLE_APPLICATION_CREDENTIALS / FIREBASE_SERVICE_ACCOUNT_JSON)."""
+    for var in ("FIREBASE_KEY_JSON", "FIREBASE_SERVICE_ACCOUNT_JSON"):
+        raw_json = os.environ.get(var, "").strip()
+        if raw_json.startswith("{"):
+            return json.loads(raw_json)
+
+    b64 = "".join(os.environ.get("FIREBASE_CREDENTIALS_B64", "").split())
+    if b64:
+        return json.loads(base64.b64decode(b64))
+
+    for var in ("GOOGLE_APPLICATION_CREDENTIALS", "FIREBASE_SERVICE_ACCOUNT_JSON"):
+        path = os.environ.get(var, "").strip()
+        if path and os.path.isfile(path):
+            with open(path, encoding="utf-8") as fh:
+                return json.load(fh)
+
+    return None
+
+
+def _init_firestore():
+    """Returns a firestore client, or None if not configured / not installed."""
+    if not _FS_OK:
+        return None
+    try:
+        cred_dict = _load_credentials_dict()
+        if not cred_dict:
+            return None
+        if not firebase_admin._apps:
+            cred = credentials.Certificate(cred_dict)
+            firebase_admin.initialize_app(cred)
+        return firestore.client()
+    except Exception as e:  # noqa: BLE001
+        log.error("Firestore init failed: %s: %s", type(e).__name__, e)
+        return None
+
+
+def _firestore_load(db) -> None:
+    """Pull every collection from Firestore into STATE['mem']."""
+    for table in _MEM_TABLES:
+        try:
+            docs = db.collection(table).stream()
+            STATE["mem"][table] = [d.to_dict() for d in docs]
+        except Exception as e:  # noqa: BLE001
+            log.error("Firestore load '%s' failed: %s: %s", table, type(e).__name__, e)
+            STATE["mem"][table] = []
+
+
+def _restore_sequences() -> None:
+    """After loading existing data, make sure next_seq() won't hand out an id
+    that already exists in the loaded rows."""
+    for table, seq_name in _ID_SEQ_NAME.items():
+        ids = [r.get("id") for r in STATE["mem"].get(table, []) if isinstance(r.get("id"), int)]
+        if ids:
+            STATE["seq"][seq_name] = max(STATE["seq"].get(seq_name, 0), max(ids))
+
+    # grievances also has a separate "grievance" sequence that drives the
+    # human-readable code (e.g. GLB-CAMP-00124) — recover it from existing codes.
+    nums = []
+    for row in STATE["mem"].get("grievances", []):
+        digits = "".join(ch for ch in str(row.get("code", "")) if ch.isdigit())
+        if digits:
+            nums.append(int(digits))
+    if nums:
+        STATE["seq"]["grievance"] = max(STATE["seq"].get("grievance", 0), max(nums))
+
+
+def flush_to_firestore() -> None:
+    """Write the current in-memory snapshot back to Firestore. Call this after
+    seeding, and ideally after requests that write data (see app.py note)."""
+    db = STATE.get("firestore_db")
+    if not db:
+        return
+    for table in _MEM_TABLES:
+        col = db.collection(table)
+        for row in STATE["mem"].get(table, []):
+            doc_id = str(row.get("id"))
+            if doc_id and doc_id != "None":
+                col.document(doc_id).set(row, merge=False)
+
+
+# --------------------------------------------------------------------- init --
+
+def _try_postgres() -> bool:
+    """Attempt to connect + ensure schema. Returns True on success."""
+    dsn = Config.DATABASE_URL
+    if not (dsn and _PG_OK):
+        return False
     from db import schema
 
+    for attempt in range(1, 4):
+        try:
+            STATE["pg_pool"] = ConnectionPool(
+                dsn, min_size=0, max_size=2, open=True, timeout=10,
+                max_idle=120, max_lifetime=600,
+                kwargs={"connect_timeout": 5, "keepalives": 1,
+                        "keepalives_idle": 30, "keepalives_interval": 5,
+                        "keepalives_count": 3, "prepare_threshold": None},
+                check=ConnectionPool.check_connection,
+            )
+            with STATE["pg_pool"].connection(timeout=10) as conn:
+                schema.ensure(conn)
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1")
+                    cur.fetchone()
+            STATE["mode"] = "postgres"
+            log.info("PostgreSQL connected (attempt %d)", attempt)
+            return True
+        except Exception as e:  # noqa: BLE001
+            log.warning("PostgreSQL attempt %d/3 failed: %s: %s",
+                        attempt, type(e).__name__, e)
+            if STATE["pg_pool"]:
+                try:
+                    STATE["pg_pool"].close(timeout=2)
+                except Exception:  # noqa: BLE001
+                    pass
+                STATE["pg_pool"] = None
+            if attempt < 3:
+                time.sleep(3)
+    return False
+
+
+def _try_firestore() -> bool:
+    """Attempt the persistent Firestore fallback. Returns True on success.
+
+    Only used in production (or when explicitly opted in with
+    ALLOW_FIRESTORE_IN_DEV=1). This stops a local dev run that happens to have
+    service-account credentials in its environment from silently reading and
+    writing the shared cloud database."""
+    if not Config.is_production() and os.environ.get("ALLOW_FIRESTORE_IN_DEV") != "1":
+        return False
+    fs_db = _init_firestore()
+    if not fs_db:
+        return False
+    STATE["firestore_db"] = fs_db
+    STATE["mode"] = "firestore"
+    _firestore_load(fs_db)
+    _restore_sequences()
+    log.warning("Entering Firestore FALLBACK mode — PostgreSQL is unavailable")
+    return True
+
+
+def init_db() -> None:
     reset_memory_store()
-    dsn = Config.DATABASE_URL
-    if dsn and _PG_OK:
-        for attempt in range(1, 4):
-            try:
-                STATE["pg_pool"] = ConnectionPool(
-                    dsn, min_size=0, max_size=2, open=True, timeout=10,
-                    max_idle=120, max_lifetime=600,
-                    kwargs={"connect_timeout": 5, "keepalives": 1,
-                            "keepalives_idle": 30, "keepalives_interval": 5,
-                            "keepalives_count": 3, "prepare_threshold": None},
-                    check=ConnectionPool.check_connection,
-                )
-                with STATE["pg_pool"].connection(timeout=10) as conn:
-                    schema.ensure(conn)
-                    with conn.cursor() as cur:
-                        cur.execute("SELECT 1")
-                        cur.fetchone()
-                STATE["mode"] = "postgres"
-                print(f"[db] Postgres connected (attempt {attempt})")
-                return
-            except Exception as e:  # noqa: BLE001
-                print(f"[db] Postgres attempt {attempt}/3 failed: {type(e).__name__}: {e}")
-                if STATE["pg_pool"]:
-                    try:
-                        STATE["pg_pool"].close(timeout=2)
-                    except Exception:  # noqa: BLE001
-                        pass
-                    STATE["pg_pool"] = None
-                if attempt < 3:
-                    time.sleep(3)
-        print("[db] Postgres unavailable — using in-memory mode")
+
+    # 1) PostgreSQL — the primary production datastore.
+    if _try_postgres():
+        return
+
+    # 2) Firestore — persistent fallback when Postgres is down.
+    if _try_firestore():
+        return
+
+    # 3) Neither backend is available.
+    if Config.is_production():
+        raise RuntimeError(
+            "UNIFIX cannot start: PostgreSQL is unavailable and no Firestore "
+            "fallback is configured. In-memory storage is NEVER used in "
+            "production because it silently loses data. Fix DATABASE_URL / "
+            "database connectivity (or configure Firestore) and redeploy."
+        )
+
     STATE["mode"] = "memory"
+    log.warning("No database reachable — using IN-MEMORY store "
+                "(development only; data is lost on restart)")

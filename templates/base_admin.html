@@ -4,13 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0e2f5c">
-  <title>{% block title %}Admin{% endblock %} &middot; UniPulse</title>
+  <title>{% block title %}Admin{% endblock %} &middot; UNIFIX</title>
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-192.png') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
 </head>
 <body class="admin">
   <header class="admin-head">
     <img class="logo" src="{{ url_for('static', filename='img/glb-logo.webp') }}" alt="GL Bajaj">
-    <div class="a-title">UniPulse Admin<small>Campus Super Admin Portal</small></div>
+    <div class="a-title">UNIFIX Admin<small>Campus Super Admin Portal</small></div>
     {% block headaction %}
       {% if current_user %}<a href="/logout" class="act" style="background:var(--navy-soft);color:var(--navy);box-shadow:none">Log out</a>{% endif %}
     {% endblock %}
@@ -24,8 +26,9 @@
     <a href="/admin/pulse" class="{{ 'on' if p == '/admin/pulse' }}">Pulse</a>
     <a href="/admin/gaps" class="{{ 'on' if p == '/admin/gaps' }}">Gaps</a>
     <a href="/admin/analytics" class="{{ 'on' if p == '/admin/analytics' }}">Analytics</a>
+    <a href="/admin/reports" class="{{ 'on' if p.startswith('/admin/reports') }}">Reports</a>
     <a href="/admin/notices" class="{{ 'on' if p == '/admin/notices' }}">Notices</a>
-    <a href="/admin/users" class="{{ 'on' if p == '/admin/users' }}">Faculty</a>
+    <a href="/admin/users" class="{{ 'on' if p == '/admin/users' }}">Employees</a>
     <a href="/admin/locations" class="{{ 'on' if p == '/admin/locations' }}">Locations</a>
     <a href="/admin/audit" class="{{ 'on' if p == '/admin/audit' }}">Audit</a>
   </nav>
@@ -33,7 +36,7 @@
   <main>{% block content %}{% endblock %}</main>
 
   <nav class="admin-bottomnav" aria-label="Admin">
-    {% set more = p == '/admin/more' or p in ['/admin/gaps','/admin/analytics','/admin/notices','/admin/users','/admin/locations','/admin/audit'] %}
+    {% set more = p == '/admin/more' or p.startswith('/admin/reports') or p in ['/admin/gaps','/admin/analytics','/admin/notices','/admin/users','/admin/locations','/admin/audit'] %}
     <a href="/admin" class="{{ 'on' if p == '/admin' }}">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="5" rx="1.5"/><rect x="13" y="10" width="8" height="11" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/></svg>Dashboard</a>
     <a href="/admin/grievances" class="{{ 'on' if p.startswith('/admin/grievances') }}">

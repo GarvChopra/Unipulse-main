@@ -4,14 +4,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0e2f5c">
-  <title>Sign in &middot; UniPulse</title>
+  <title>Sign in &middot; UNIFIX</title>
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-192.png') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
 </head>
 <body>
 <div class="auth-wrap">
   <div class="auth-hero">
     <img src="{{ url_for('static', filename='img/glb-logo.webp') }}" alt="GL Bajaj">
-    <b id="brandline">UniPulse</b>
+    <b id="brandline">UNIFIX</b>
     <span>GL Bajaj Institute of Technology &amp; Management</span>
   </div>
 
@@ -20,7 +22,7 @@
     <p class="sub" id="portal">Campus Grievance &amp; Infrastructure Portal</p>
 
     <div class="seg" role="tablist">
-      <button type="button" class="on" id="seg-faculty" onclick="segTo('faculty')">Faculty / Staff</button>
+      <button type="button" class="on" id="seg-faculty" onclick="segTo('faculty')">Employee</button>
       <button type="button" id="seg-admin" onclick="segTo('admin')">Admin</button>
     </div>
 
@@ -37,7 +39,7 @@
     </form>
 
     <p class="tiny muted" id="hint" style="text-align:center;margin-top:14px">
-      Faculty accounts are created by the campus admin.</p>
+      Employee accounts are created by the campus admin.</p>
   </div>
 
   <p class="auth-foot">Together for a cleaner, safer &amp; smarter GL Bajaj campus</p>
@@ -48,14 +50,14 @@ function segTo(w){
   document.getElementById('seg-faculty').classList.toggle('on', !admin);
   document.getElementById('seg-admin').classList.toggle('on', admin);
   document.body.classList.toggle('admin-login', admin);
-  document.getElementById('brandline').textContent = admin ? 'UniPulse Admin' : 'UniPulse';
+  document.getElementById('brandline').textContent = admin ? 'UNIFIX Admin' : 'UNIFIX';
   document.getElementById('welcome').textContent = admin ? 'Admin sign-in' : 'Welcome back';
   document.getElementById('portal').textContent = admin
     ? 'Campus Super Admin Portal' : 'Campus Grievance & Infrastructure Portal';
   document.getElementById('ul').textContent = admin ? 'Admin ID' : 'Username';
   document.getElementById('username').placeholder = admin ? 'admin' : 'prof.name';
   document.getElementById('hint').textContent = admin
-    ? 'Secure · Transparent · Efficient' : 'Faculty accounts are created by the campus admin.';
+    ? 'Secure · Transparent · Efficient' : 'Employee accounts are created by the campus admin.';
 }
 </script>
 </body>

@@ -2,7 +2,7 @@
 {% block title %}Home{% endblock %}
 {% block content %}
 <h2>Hello, {{ current_user.display_name }} 👋</h2>
-<p class="muted" style="margin-top:-4px">{{ current_user.department or 'Faculty' }}</p>
+<p class="muted" style="margin-top:-4px">{{ current_user.department or 'Employee' }}</p>
 
 <a class="action-card" href="/report">
   <span><b>Report an Issue</b><span class="ac-sub">Spot &middot; Share &middot; Resolve</span></span>

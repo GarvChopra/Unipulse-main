@@ -12,4 +12,4 @@ def test_healthz(client):
 def test_login_page_renders(client):
     r = client.get("/login")
     assert r.status_code == 200
-    assert b"UniPulse" in r.data
+    assert b"UNIFIX" in r.data

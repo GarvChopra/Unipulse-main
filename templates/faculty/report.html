@@ -47,8 +47,8 @@
   <!-- ---- 2. details ---- -->
   <div class="wstep" data-step="loc">
     <h3>Where is the issue?</h3>
-    <div class="pill-row" id="type-pills"></div>
-    <div id="drill"></div>
+    <p class="tiny muted" style="margin-top:-4px">{{ picker.campus }}</p>
+    <div id="drill" class="loc-picker"></div>
 
     <label for="cat">Issue Category</label>
     <select id="cat">
@@ -82,9 +82,7 @@
     <h3>Review &amp; submit</h3>
     <img id="preview2" class="evidence" style="margin:8px 0" alt="report photo">
     <div class="card">
-      <div class="sum-row"><span class="k">Block</span><span class="v" id="r-block">—</span></div>
-      <div class="sum-row"><span class="k">Floor</span><span class="v" id="r-floor">—</span></div>
-      <div class="sum-row"><span class="k">Room / Area</span><span class="v" id="r-room">—</span></div>
+      <div class="sum-row"><span class="k">Location</span><span class="v" id="r-loc">—</span></div>
       <div class="sum-row"><span class="k">Category</span><span class="v" id="r-cat">Auto-detect</span></div>
       <div class="sum-row"><span class="k">Priority</span><span class="v" id="r-pri"></span></div>
       <div class="sum-row"><span class="k">When noticed</span><span class="v" id="r-when">Not set</span></div>

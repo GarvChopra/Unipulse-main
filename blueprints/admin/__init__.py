@@ -8,7 +8,7 @@ from flask import Blueprint, Response, abort, g, redirect, render_template, requ
 
 from db import audit, evidence, grievances, locations, notices, recurring, timeline, users
 from domain.constants import (CATEGORIES, LOCATION_TYPES, RESPONSIBLE_UNITS_FLAT,
-                              STATUS_TRANSITIONS, STATUSES)
+                              ROOM_TYPES, STATUS_TRANSITIONS, STATUSES)
 from domain.rbac import (ANALYTICS_VIEW, AUDIT_VIEW, GRIEVANCE_ASSIGN,
                          GRIEVANCE_CHANGE_STATUS, GRIEVANCE_CLOSE,
                          GRIEVANCE_CORRECT_CATEGORY, GRIEVANCE_VERIFY,
@@ -22,6 +22,13 @@ bp = Blueprint("admin", __name__, url_prefix="/admin",
 
 _STATUS_RANK = {s: i for i, s in enumerate(STATUSES)}
 _DONE = ("resolved", "admin_verified", "closed")
+
+# how the queue rows are ordered for each value of the sort control
+_ROW_SORTS = {
+    "priority": lambda r: (-(r["priority_score"] or 0), -(r["created_at"] or 0)),
+    "created":  lambda r: -(r["created_at"] or 0),
+    "due":      lambda r: (r["due_at"] or 9e18, -(r["priority_score"] or 0)),
+}
 
 
 @bp.before_request
@@ -68,22 +75,58 @@ def dashboard():
 
 # ── queue ──────────────────────────────────────────────────────────────────
 
+def _location_filters():
+    """Building / floor / facility option lists for the queue filter bar,
+    derived from the live location tree."""
+    root = locations.campus_root()
+    tops = locations.children(root["id"]) if root else []
+    buildings, facilities, floors = [], [], set()
+    for t in tops:
+        if t["location_type"] == "building":
+            buildings.append(t["name"])
+            for f in locations.children(t["id"]):
+                floors.add(f["name"])
+        elif t["location_type"] in ("facility", "zone"):
+            facilities.append(t["name"])
+    return {"buildings": buildings, "facilities": facilities,
+            "floors": sorted(floors)}
+
+
 @bp.get("/grievances")
 def queue_page():
     return render_template("admin/queue.html", categories=CATEGORIES, statuses=STATUSES,
-                           units=RESPONSIBLE_UNITS_FLAT, location_types=LOCATION_TYPES)
+                           units=RESPONSIBLE_UNITS_FLAT, location_types=LOCATION_TYPES,
+                           loc=_location_filters())
+
+
+_last_recompute = [0.0]
 
 
 @bp.get("/grievances/data")
 def queue_data():
-    grievance_service.recompute_open()
+    # Priority score has a slow age component (changes at most once/day per
+    # grievance). Recompute it periodically, not on every poll — it issues one
+    # UPDATE per open grievance, which is slow against a remote database.
+    now = _time.time()
+    if now - _last_recompute[0] > 900:          # 15 min
+        try:
+            grievance_service.recompute_open()
+        except Exception as e:                   # noqa: BLE001 - never block the queue
+            import logging
+            logging.getLogger("unifix").warning("recompute_open skipped: %s", e)
+        _last_recompute[0] = now
+    sort_key = request.args.get("sort") or "priority"
     rows = grievances.list_query(
         status=request.args.get("status") or None,
         category=request.args.get("category") or None,
         responsible_unit=request.args.get("unit") or None,
         location_type=request.args.get("location_type") or None,
+        building=request.args.get("building") or None,
+        floor=request.args.get("floor") or None,
+        room=request.args.get("room") or None,
+        facility=request.args.get("facility") or None,
         search=request.args.get("search") or None,
-        sort=request.args.get("sort") or "priority",
+        sort=sort_key,
         limit=500,
     )
     now = _time.time()
@@ -104,7 +147,8 @@ def queue_data():
             "category": gg["category"], "status": gg["status"],
             "location_label": gg["location_label"], "priority_score": gg["priority_score"],
             "report_count": 1, "reporter_name": gg["reporter_name"],
-            "due_at": gg["due_at"], "overdue": _overdue(gg), "is_group": False,
+            "due_at": gg["due_at"], "created_at": gg["created_at"],
+            "overdue": _overdue(gg), "is_group": False,
         })
     for gid, members in grouped.items():
         grp = active_groups[gid]
@@ -115,11 +159,13 @@ def queue_data():
             "location_label": grp["location_label"],
             "priority_score": max(m["priority_score"] for m in members),
             "report_count": grp["report_count"],
-            "reporter_name": f"{grp['reporter_count']} faculty",
-            "due_at": lead["due_at"], "overdue": any(_overdue(m) for m in members),
+            "reporter_name": f"{grp['reporter_count']} employees",
+            "due_at": lead["due_at"],
+            "created_at": max((m["created_at"] or 0) for m in members),
+            "overdue": any(_overdue(m) for m in members),
             "is_group": True,
         })
-    out.sort(key=lambda r: -r["priority_score"])
+    out.sort(key=_ROW_SORTS.get(sort_key, _ROW_SORTS["priority"]))
     return {"rows": out}
 
 
@@ -282,7 +328,75 @@ def analytics_csv():
     for gr in grievances.list_query(limit=100000):
         w.writerow([gr.get(c) for c in cols])
     return Response(buf.getvalue(), mimetype="text/csv",
-                    headers={"Content-Disposition": "attachment; filename=unipulse_grievances.csv"})
+                    headers={"Content-Disposition": "attachment; filename=unifix_grievances.csv"})
+
+
+# ── reports & downloads (time-windowed issue export) ──────────────────────
+
+# label -> number of days back (None = all time). Order defines the button row.
+_REPORT_WINDOWS = [
+    ("7d", "last 7 days", 7),
+    ("30d", "last 30 days", 30),
+    ("60d", "last 60 days", 60),
+    ("all", "all time", None),
+]
+_REPORT_COLS = [
+    ("code", "Code"), ("reported_on", "Reported On"), ("category", "Category"),
+    ("severity", "Severity"), ("status", "Status"), ("location_label", "Location"),
+    ("responsible_unit", "Responsible Unit"), ("assignee", "Assignee"),
+    ("reporter_name", "Reported By"), ("priority_score", "Priority"),
+    ("recurring_group_id", "Recurring Group"),
+]
+
+
+def _resolve_window(raw):
+    """Return (key, label, days). Unknown / missing values fall back to '7d'."""
+    for key, label, days in _REPORT_WINDOWS:
+        if raw == key:
+            return key, label, days
+    return _REPORT_WINDOWS[0]
+
+
+def _issues_in_window(days):
+    since = None if days is None else _time.time() - days * 86400
+    rows = grievances.list_query(limit=100000, sort="created", created_since=since)
+    return rows
+
+
+def _report_row(gr):
+    ts = gr.get("created_at")
+    on = _time.strftime("%Y-%m-%d %H:%M", _time.localtime(ts)) if ts else ""
+    out = {"reported_on": on}
+    for field, _ in _REPORT_COLS:
+        if field != "reported_on":
+            out[field] = gr.get(field)
+    return out
+
+
+@bp.get("/reports")
+@require_permission(ANALYTICS_VIEW)
+def reports_page():
+    key, label, days = _resolve_window(request.args.get("window"))
+    rows = [_report_row(g) for g in _issues_in_window(days)]
+    return render_template("admin/reports.html", windows=_REPORT_WINDOWS,
+                           window_key=key, window_label=label, count=len(rows),
+                           rows=rows, columns=_REPORT_COLS)
+
+
+@bp.get("/reports.csv")
+@require_permission(ANALYTICS_VIEW)
+def reports_csv():
+    key, label, days = _resolve_window(request.args.get("window"))
+    buf = _io.StringIO()
+    w = csv.writer(buf)
+    w.writerow([head for _, head in _REPORT_COLS])
+    for g in _issues_in_window(days):
+        r = _report_row(g)
+        w.writerow([r.get(field) for field, _ in _REPORT_COLS])
+    stamp = _time.strftime("%Y-%m-%d")
+    fname = f"unifix_issues_{label.replace(' ', '_')}_{stamp}.csv"
+    return Response(buf.getvalue(), mimetype="text/csv",
+                    headers={"Content-Disposition": f"attachment; filename={fname}"})
 
 
 # ── notices CRUD ──────────────────────────────────────────────────────────
@@ -314,16 +428,25 @@ def notice_publish(nid):
 @require_permission(USER_MANAGE)
 def users_page():
     if request.method == "POST":
+        # Never trust the role straight off the form — whitelist it.
+        role = (request.form.get("role") or "reporter").strip()
+        if role not in users.VALID_ROLES:
+            return render_template("admin/users.html", users=users.list_all(),
+                                   error=f"Invalid role {role!r}"), 400
         try:
             u = users.create(request.form["username"].strip(),
                              request.form["display_name"].strip(),
-                             request.form.get("role", "reporter"),
+                             role,
                              hash_pin(request.form["pin"].strip()),
                              department=request.form.get("department", "").strip() or None,
                              created_by=_actor())
-            audit.add(_actor(), "user.create", target_type="user", target_id=u["id"])
         except ValueError as e:
             return render_template("admin/users.html", users=users.list_all(), error=str(e))
+        # Global audit trail: record every account creation with its role, and
+        # flag admin creation as its own action so privilege grants stand out.
+        audit.add(_actor(), "admin.create" if role == "admin" else "user.create",
+                  target_type="user", target_id=u["id"],
+                  detail={"username": u["username"], "role": role})
         return redirect("/admin/users")
     return render_template("admin/users.html", users=users.list_all(), error=None)
 
@@ -332,46 +455,130 @@ def users_page():
 @require_permission(USER_MANAGE)
 def user_toggle(uid):
     u = users.get_by_id(uid)
+    if not u:
+        abort(404)
+    going_inactive = u["is_active"]
+    if going_inactive:
+        if u["username"] == _actor():
+            return render_template("admin/users.html", users=users.list_all(),
+                                   error="You cannot deactivate your own account."), 400
+        if u["role"] == "admin" and users.count_active_admins() <= 1:
+            return render_template("admin/users.html", users=users.list_all(),
+                                   error="Cannot deactivate the last active admin."), 400
     users.set_active(uid, not u["is_active"])
-    audit.add(_actor(), "user.toggle", target_type="user", target_id=uid,
-              detail={"active": not u["is_active"]})
+    audit.add(_actor(), "user.deactivate" if going_inactive else "user.activate",
+              target_type="user", target_id=uid,
+              detail={"username": u["username"], "active": not u["is_active"]})
+    return redirect("/admin/users")
+
+
+@bp.post("/users/<int:uid>/delete")
+@require_permission(USER_MANAGE)
+def user_delete(uid):
+    """Complete a user's deletion request: de-identify the account and their
+    reporter name on historical grievances."""
+    u = users.get_by_id(uid)
+    if not u:
+        abort(404)
+    other_admins = [a for a in users.list_all(role="admin") if a["id"] != uid]
+    if u["role"] == "admin" and not other_admins:
+        return render_template("admin/users.html", users=users.list_all(),
+                               error="Cannot delete the only admin account."), 400
+    users.deidentify(uid)
+    audit.add(_actor(), "user.deleted", target_type="user", target_id=uid,
+              detail={"username": u["username"]})
     return redirect("/admin/users")
 
 
 @bp.post("/users/<int:uid>/pin")
 @require_permission(USER_MANAGE)
 def user_pin(uid):
+    u = users.get_by_id(uid)
+    if not u:
+        abort(404)
     users.set_pin(uid, hash_pin(request.form["pin"].strip()))
-    audit.add(_actor(), "user.reset_pin", target_type="user", target_id=uid)
+    users.set_must_change_pin(uid, True)   # admin-reset PIN is temporary
+    audit.add(_actor(), "user.reset_pin", target_type="user", target_id=uid,
+              detail={"username": u["username"]})
     return redirect("/admin/users")
 
 
 # ── locations CRUD ────────────────────────────────────────────────────────
 
+# which node kinds may be created under a given parent kind
+_KIND_UNDER = {
+    "campus":   ("building", "facility"),
+    "building": ("floor",),
+    "floor":    ("room",),
+    "facility": ("area",),
+    "zone":     ("subzone",),
+    "area":     (),
+    "subzone":  (),
+    "room":     (),
+}
+_KIND_LABEL = {"building": "Building / Block", "floor": "Floor", "room": "Room",
+               "facility": "Facility", "area": "Sub-area", "subzone": "Sub-zone"}
+_KIND_BUCKET = {"building": "academics_block", "facility": "facility"}
+
+
+def _loc_tree_rows():
+    """Flat, indented list of the whole tree for the admin page."""
+    out = []
+
+    def walk(node, depth):
+        out.append({**node, "depth": depth})
+        for c in sorted(locations.list_all(active_only=False),
+                        key=lambda l: (l["sort_order"], l["name"])):
+            if c["parent_id"] == node["id"]:
+                walk(c, depth + 1)
+
+    root = locations.campus_root()
+    if root:
+        walk(root, 0)
+    return out
+
+
 @bp.route("/locations", methods=["GET", "POST"])
 @require_permission(LOCATION_MANAGE)
 def locations_page():
+    error = None
     if request.method == "POST":
-        lt = request.form.get("location_type", "block")
-        name = request.form["name"].strip()
-        prefix = {"block": "Academics Block > ", "floor": "Academics Block > ",
-                  "subzone": "Outer Area > "}.get(lt, "")
         try:
-            loc = locations.create(lt, name, prefix + name)
-            audit.add(_actor(), "location.create", target_type="location", target_id=loc["id"])
-        except ValueError as e:
-            return render_template("admin/locations.html",
-                                   locations=locations.list_all(active_only=False), error=str(e))
-        return redirect("/admin/locations")
-    return render_template("admin/locations.html",
-                           locations=locations.list_all(active_only=False), error=None)
+            parent_id = int(request.form["parent_id"])
+            parent = locations.get(parent_id)
+            if not parent:
+                raise ValueError("Unknown parent location")
+            kind = request.form.get("kind", "")
+            if kind not in _KIND_UNDER.get(parent["location_type"], ()):
+                raise ValueError(f"Cannot add a {kind or '?'} under {parent['name']}")
+            room_type = request.form.get("room_type") or None
+            if kind == "room" and room_type and room_type not in ROOM_TYPES:
+                raise ValueError("Unknown room type")
+            loc = locations.create(
+                kind, request.form["name"], parent_id=parent_id,
+                room_type=room_type if kind == "room" else None,
+                bucket=_KIND_BUCKET.get(kind))
+            audit.add(_actor(), "location.create", target_type="location",
+                      target_id=loc["id"], detail={"path": loc["full_path"]})
+            return redirect("/admin/locations")
+        except (ValueError, KeyError) as e:
+            error = str(e)
+
+    parents = [l for l in _loc_tree_rows()
+               if _KIND_UNDER.get(l["location_type"], ())]
+    return render_template("admin/locations.html", rows=_loc_tree_rows(),
+                           parents=parents, kind_under=_KIND_UNDER,
+                           kind_label=_KIND_LABEL, room_types=ROOM_TYPES, error=error)
 
 
 @bp.post("/locations/<int:lid>/toggle")
 @require_permission(LOCATION_MANAGE)
 def location_toggle(lid):
-    cur = next((l for l in locations.list_all(active_only=False) if l["id"] == lid), None)
-    locations.set_active(lid, not cur["is_active"])
+    cur = locations.get(lid)
+    if cur:
+        locations.set_active(lid, not cur["is_active"])
+        audit.add(_actor(), "location.toggle", target_type="location", target_id=lid,
+                  detail={"active": not cur["is_active"]})
     return redirect("/admin/locations")
 
 

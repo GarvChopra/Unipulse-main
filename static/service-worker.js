@@ -1,4 +1,4 @@
-const CACHE = "unipulse-shell-v2";
+const CACHE = "unifix-shell-v2";
 const SHELL = ["/", "/report", "/my-reports", "/notices", "/offline",
                "/static/css/app.css", "/static/js/report.js",
                "/static/icons/icon-192.png"];

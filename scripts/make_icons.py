@@ -1,27 +1,56 @@
-"""Generate flat GL-Bajaj-navy PWA icons without Pillow. Run once."""
-import struct
-import zlib
+"""Generate UNIFIX PWA / Android launcher icons from the GL Bajaj crest.
+
+Outputs (static/icons/):
+    icon-192.png, icon-512.png          — "any" purpose, full-bleed navy + crest
+    maskable-192.png, maskable-512.png  — "maskable", crest inside the ~80% safe zone
+
+Run once (or whenever the source logo changes):  python scripts/make_icons.py
+"""
 from pathlib import Path
 
-NAVY = (11, 42, 91)  # #0b2a5b
+from PIL import Image
+
+NAVY = (14, 47, 92)          # #0e2f5c — matches the app + manifest theme_color
+ROOT = Path(__file__).resolve().parent.parent
+SRC = ROOT / "static" / "img" / "glb-logo.webp"
+OUT = ROOT / "static" / "icons"
 
 
-def _png(size: int, rgb) -> bytes:
-    def chunk(tag, data):
-        return (struct.pack(">I", len(data)) + tag + data +
-                struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF))
-
-    row = bytes((0,)) + bytes(rgb) * size          # filter byte + RGB pixels
-    raw = row * size
-    ihdr = struct.pack(">IIBBBBB", size, size, 8, 2, 0, 0, 0)  # 8-bit RGB
-    return (b"\x89PNG\r\n\x1a\n"
-            + chunk(b"IHDR", ihdr)
-            + chunk(b"IDAT", zlib.compress(raw, 9))
-            + chunk(b"IEND", b""))
+def _canvas(size: int, logo: Image.Image, logo_frac: float) -> Image.Image:
+    img = Image.new("RGB", (size, size), NAVY)
+    target = int(size * logo_frac)
+    l = logo.copy()
+    l.thumbnail((target, target), Image.LANCZOS)
+    x = (size - l.width) // 2
+    y = (size - l.height) // 2
+    img.paste(l, (x, y), l if l.mode == "RGBA" else None)
+    return img
 
 
-out = Path(__file__).resolve().parent.parent / "static" / "icons"
-out.mkdir(parents=True, exist_ok=True)
-for s in (192, 512):
-    (out / f"icon-{s}.png").write_bytes(_png(s, NAVY))
-    print("wrote", out / f"icon-{s}.png")
+def _drop_white(img: Image.Image, thresh: int = 238) -> Image.Image:
+    """Make the near-white studio background of the source crest transparent so
+    it sits on the navy tile cleanly. A logo that already has an alpha channel
+    is left alone."""
+    img = img.convert("RGBA")
+    px = img.load()
+    w, h = img.size
+    for y in range(h):
+        for x in range(w):
+            r, g, b, a = px[x, y]
+            if r >= thresh and g >= thresh and b >= thresh:
+                px[x, y] = (r, g, b, 0)
+    return img
+
+
+def main() -> None:
+    OUT.mkdir(parents=True, exist_ok=True)
+    logo = _drop_white(Image.open(SRC))
+    for size in (192, 512):
+        _canvas(size, logo, 0.66).save(OUT / f"icon-{size}.png")
+        # maskable: keep the crest within the 80% safe circle
+        _canvas(size, logo, 0.52).save(OUT / f"maskable-{size}.png")
+        print("wrote", OUT / f"icon-{size}.png", "+ maskable")
+
+
+if __name__ == "__main__":
+    main()

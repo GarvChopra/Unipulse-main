@@ -1,9 +1,9 @@
-"""Realistic demo campus data for UniPulse. Idempotent. Run: python scripts/seed_demo.py
+"""Realistic demo campus data for UNIFIX. Idempotent. Run: python scripts/seed_demo.py
 
 Builds ~35 grievances from several faculty across every category, spread over the
 last six weeks, in every workflow state — enough for the dashboard, Pulse, Gaps
 and Analytics to look meaningful. Includes the MVP recurring "Room 204 projector"
-scenario and a Block B electrical gap.
+scenario and an AB1 electrical gap.
 """
 from __future__ import annotations
 
@@ -19,14 +19,14 @@ _FAC = ["prof.rao", "dr.iyer", "prof.khan", "prof.sharma"]
 
 # (description, location_type, block, floor, room/subzone, days-ago, target-status, priority)
 _ITEMS = [
-    ("The projector in Room 204 will not switch on again", "academics_block", "Block B", "2nd Floor", "204", 3, "verified", "high"),
-    ("Projector 204 is completely dead, no signal to the screen", "academics_block", "Block B", "2nd Floor", "204", 2, "reported", "high"),
-    ("Room 204 projector not working - third time this month", "academics_block", "Block B", "2nd Floor", "204", 1, "reported", "high"),
-    ("The tube light keeps flickering in this classroom", "academics_block", "Block B", "1st Floor", "101", 12, "assigned", "medium"),
-    ("Switchboard is sparking near the entrance of this room", "academics_block", "Block B", "1st Floor", "105", 9, "in_progress", "high"),
-    ("Ceiling fan is not working at all in this room", "academics_block", "Block B", "Ground Floor", "108", 20, "resolved", "medium"),
-    ("Half the tube lights in this room are not working", "academics_block", "Block B", "3rd Floor", "302", 5, "verified", "medium"),
-    ("Power socket near the podium has no output", "academics_block", "Block B", "2nd Floor", "210", 15, "closed", "low"),
+    ("The projector in Room 204 will not switch on again", "academics_block", "AB1", "2nd Floor", "204", 3, "verified", "high"),
+    ("Projector 204 is completely dead, no signal to the screen", "academics_block", "AB1", "2nd Floor", "204", 2, "reported", "high"),
+    ("Room 204 projector not working - third time this month", "academics_block", "AB1", "2nd Floor", "204", 1, "reported", "high"),
+    ("The tube light keeps flickering in this classroom", "academics_block", "AB1", "1st Floor", "101", 12, "assigned", "medium"),
+    ("Switchboard is sparking near the entrance of this room", "academics_block", "AB1", "1st Floor", "105", 9, "in_progress", "high"),
+    ("Ceiling fan is not working at all in this room", "academics_block", "AB1", "Ground Floor", "108", 20, "resolved", "medium"),
+    ("Half the tube lights in this room are not working", "academics_block", "AB1", "3rd Floor", "302", 5, "verified", "medium"),
+    ("Power socket near the podium has no output", "academics_block", "AB1", "2nd Floor", "210", 15, "closed", "low"),
     ("Water is leaking from the pipe under the basin in the hostel washroom", "hostels", None, None, None, 25, "closed", "medium"),
     ("The washroom tap on this floor will not stop running", "hostels", None, None, None, 8, "assigned", "medium"),
     ("Drain in the common bathroom is completely blocked", "hostels", None, None, None, 4, "reported", "high"),
@@ -34,25 +34,25 @@ _ITEMS = [
     ("The AC in the mess hall has stopped cooling completely", "mess_canteen", None, None, None, 18, "assigned", "medium"),
     ("Exhaust fan in the kitchen area is making a loud noise", "mess_canteen", None, None, None, 30, "closed", "low"),
     ("A dining table in the mess is broken and unsafe", "mess_canteen", None, None, None, 6, "in_progress", "medium"),
-    ("Wall near the notice board has a large crack", "academics_block", "Block C", "Ground Floor", "12", 22, "resolved", "medium"),
-    ("Water seepage on the ceiling of this classroom after rain", "academics_block", "Block C", "1st Floor", "118", 14, "assigned", "high"),
-    ("Broken window pane in the corridor of Block C", "academics_block", "Block C", "2nd Floor", "205", 10, "verified", "medium"),
-    ("The classroom door lock is jammed and will not open", "academics_block", "Block C", "Ground Floor", "9", 7, "in_progress", "medium"),
-    ("Several floor tiles are cracked and lifting near the lab", "academics_block", "Block C", "1st Floor", "121", 33, "closed", "low"),
-    ("Wifi has been down in this block for two days", "academics_block", "Block A", "2nd Floor", "301", 11, "assigned", "high"),
-    ("The classroom computer will not boot up", "academics_block", "Block A", "1st Floor", "110", 16, "resolved", "medium"),
-    ("Smart board in this room shows no signal over HDMI", "academics_block", "Block A", "3rd Floor", "315", 5, "reported", "medium"),
-    ("Network port in the staff room is not connecting", "academics_block", "Block A", "Ground Floor", "3", 28, "closed", "low"),
-    ("The printer in the department office is out of order", "academics_block", "Block A", "1st Floor", "112", 9, "verified", "low"),
-    ("Lift in Block A has been out of service since morning", "academics_block", "Block A", "Ground Floor", None, 3, "in_progress", "high"),
-    ("Water cooler on this floor is not cooling", "academics_block", "Block A", "2nd Floor", None, 13, "assigned", "low"),
+    ("Wall near the notice board has a large crack", "academics_block", "AB2", "Ground Floor", "12", 22, "resolved", "medium"),
+    ("Water seepage on the ceiling of this classroom after rain", "academics_block", "AB2", "1st Floor", "118", 14, "assigned", "high"),
+    ("Broken window pane in the corridor of AB2", "academics_block", "AB2", "2nd Floor", "205", 10, "verified", "medium"),
+    ("The classroom door lock is jammed and will not open", "academics_block", "AB2", "Ground Floor", "9", 7, "in_progress", "medium"),
+    ("Several floor tiles are cracked and lifting near the lab", "academics_block", "AB2", "1st Floor", "121", 33, "closed", "low"),
+    ("Wifi has been down in this block for two days", "academics_block", "AB1", "2nd Floor", "301", 11, "assigned", "high"),
+    ("The classroom computer will not boot up", "academics_block", "AB1", "1st Floor", "110", 16, "resolved", "medium"),
+    ("Smart board in this room shows no signal over HDMI", "academics_block", "AB1", "3rd Floor", "315", 5, "reported", "medium"),
+    ("Network port in the staff room is not connecting", "academics_block", "AB1", "Ground Floor", "3", 28, "closed", "low"),
+    ("The printer in the department office is out of order", "academics_block", "AB1", "1st Floor", "112", 9, "verified", "low"),
+    ("Lift in Block A has been out of service since morning", "academics_block", "AB1", "Ground Floor", None, 3, "in_progress", "high"),
+    ("Water cooler on this floor is not cooling", "academics_block", "AB1", "2nd Floor", None, 13, "assigned", "low"),
     ("Corridor lights on the playground side stay off at night", "outer_area", None, None, "Common/Electrical", 17, "assigned", "medium"),
     ("The security cabin light near the main gate is broken", "outer_area", None, None, "Security", 6, "verified", "medium"),
     ("Sewage is overflowing near the drainage line behind the mess", "outer_area", None, None, "Drainage", 4, "in_progress", "high"),
     ("Sprinklers on the front lawn are stuck on and flooding the path", "outer_area", None, None, "Lawn Area", 21, "closed", "low"),
     ("A section of the boundary fence near the sports complex is damaged", "playground", None, None, None, 26, "resolved", "medium"),
     ("Floodlights on the playground are not switching on", "playground", None, None, None, 9, "assigned", "medium"),
-    ("The generator did not switch on during the last power cut", "academics_block", "Block B", "Ground Floor", None, 12, "verified", "high"),
+    ("The generator did not switch on during the last power cut", "academics_block", "AB1", "Ground Floor", None, 12, "verified", "high"),
 ]
 
 
@@ -66,7 +66,7 @@ def _flat_label(ltype, sub):
 def _submit(uname, desc, ltype, block, floor, room, sub, priority):
     u = users.get_by_username(uname)
     if ltype == "academics_block":
-        parts = ["Academics Block", block, floor] + ([f"Room {room}"] if room else [])
+        parts = [block, floor] + ([f"Room {room}"] if room else [])
         label = " > ".join([p for p in parts if p])
     else:
         label = _flat_label(ltype, sub)

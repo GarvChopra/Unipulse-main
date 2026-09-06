@@ -111,9 +111,23 @@ def test_user_create_and_toggle(client):
 
 def test_location_add(client):
     _admin(client)
-    client.post("/admin/locations", data={"location_type": "block", "name": "Block E"})
     from db import locations
-    assert "Block E" in locations.picker()["academics_blocks"]
+    ab1 = next(c for c in locations.children(locations.campus_root()["id"])
+               if c["name"] == "AB1")
+    floor = locations.children(ab1["id"])[0]
+    client.post("/admin/locations", data={"parent_id": floor["id"], "kind": "room",
+                                          "name": "204", "room_type": "Classroom"})
+    kids = [k["name"] for k in locations.children(floor["id"])]
+    assert "204" in kids
+
+
+def test_location_add_rejects_illegal_nesting(client):
+    _admin(client)
+    from db import locations
+    root = locations.campus_root()["id"]
+    r = client.post("/admin/locations", data={"parent_id": root, "kind": "room",
+                                              "name": "999"})
+    assert b"Cannot add a room" in r.data
 
 
 def test_audit_page_lists_actions(client):

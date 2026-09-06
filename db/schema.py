@@ -11,9 +11,14 @@ CREATE TABLE IF NOT EXISTS users (
     contact       TEXT,
     is_active     BOOLEAN DEFAULT TRUE,
     created_at    DOUBLE PRECISION,
-    created_by    TEXT
+    created_by    TEXT,
+    must_change_pin    BOOLEAN DEFAULT FALSE,
+    deletion_requested BOOLEAN DEFAULT FALSE
 );
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+-- additive migrations for older databases
+ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_pin    BOOLEAN DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS deletion_requested BOOLEAN DEFAULT FALSE;
 
 CREATE TABLE IF NOT EXISTS locations (
     id            BIGSERIAL PRIMARY KEY,
@@ -21,9 +26,17 @@ CREATE TABLE IF NOT EXISTS locations (
     location_type TEXT NOT NULL,
     name          TEXT NOT NULL,
     full_path     TEXT UNIQUE NOT NULL,
-    is_active     BOOLEAN DEFAULT TRUE
+    is_active     BOOLEAN DEFAULT TRUE,
+    room_type     TEXT,
+    bucket        TEXT,
+    sort_order    INTEGER DEFAULT 0
 );
-CREATE INDEX IF NOT EXISTS idx_locations_type ON locations(location_type);
+CREATE INDEX IF NOT EXISTS idx_locations_type   ON locations(location_type);
+CREATE INDEX IF NOT EXISTS idx_locations_parent ON locations(parent_id);
+-- additive migrations for databases created before the location-tree rework
+ALTER TABLE locations ADD COLUMN IF NOT EXISTS room_type  TEXT;
+ALTER TABLE locations ADD COLUMN IF NOT EXISTS bucket     TEXT;
+ALTER TABLE locations ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0;
 
 CREATE TABLE IF NOT EXISTS recurring_groups (
     id                   BIGSERIAL PRIMARY KEY,
@@ -54,6 +67,7 @@ CREATE TABLE IF NOT EXISTS grievances (
                        CHECK (status IN ('reported','verified','assigned','in_progress',
                                          'resolved','admin_verified','closed')),
     location_type      TEXT,
+    location_id        BIGINT REFERENCES locations(id),
     block_no           TEXT,
     floor              TEXT,
     room               TEXT,
@@ -76,7 +90,9 @@ CREATE TABLE IF NOT EXISTS grievances (
     resolved_at        DOUBLE PRECISION,
     closed_at          DOUBLE PRECISION
 );
+ALTER TABLE grievances ADD COLUMN IF NOT EXISTS location_id BIGINT REFERENCES locations(id);
 CREATE INDEX IF NOT EXISTS idx_grievances_status    ON grievances(status);
+CREATE INDEX IF NOT EXISTS idx_grievances_location  ON grievances(location_id);
 CREATE INDEX IF NOT EXISTS idx_grievances_category  ON grievances(category);
 CREATE INDEX IF NOT EXISTS idx_grievances_created   ON grievances(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_grievances_recurring ON grievances(recurring_group_id);

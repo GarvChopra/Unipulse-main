@@ -1,14 +1,34 @@
-"""UniPulse - GL Bajaj campus infrastructure intelligence. Flask app factory."""
+"""UNIFIX - GL Bajaj campus infrastructure intelligence. Flask app factory."""
+import logging
 import os
 
-from flask import Flask, g, request
+from flask import Flask, g, redirect, request
 
 from config import Config
 from domain.constants import GLB
 from services import auth_service
 
+_LOG_CONFIGURED = False
+
+
+def _configure_logging() -> None:
+    global _LOG_CONFIGURED
+    if _LOG_CONFIGURED:
+        return
+    level = logging.DEBUG if os.environ.get("FLASK_DEBUG") == "1" else logging.INFO
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+    _LOG_CONFIGURED = True
+
 
 def create_app() -> Flask:
+    _configure_logging()
+    log = logging.getLogger("unifix")
+
+    Config.validate()
+
     app = Flask(__name__, template_folder="templates", static_folder="static")
     app.config["SECRET_KEY"] = Config.SECRET_KEY
     app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
@@ -18,6 +38,14 @@ def create_app() -> Flask:
 
     from db import seeds
     seeds.run()
+
+    log.info("UNIFIX starting — env=%s, db=%s", Config.APP_ENV, pool.STATE["mode"])
+
+    from services import storage_service
+    storage_service.warn_if_unconfigured()
+
+    from blueprints.public import bp as public_bp
+    app.register_blueprint(public_bp)
 
     from blueprints.auth import bp as auth_bp
     app.register_blueprint(auth_bp)
@@ -30,16 +58,74 @@ def create_app() -> Flask:
 
     @app.before_request
     def _load_user():
+        """Resolve the current user from the access-token cookie, transparently
+        renewing it from the refresh-token cookie when it has expired, and
+        ALWAYS reconciling against the live DB row so a deactivation, a role
+        change or a PIN reset takes effect on the very next request instead of
+        up to 15 minutes later."""
         g.current_user = None
-        token = request.cookies.get("up_access")
-        if not token:
-            return
+        g._auth_cookie_action = None          # (set|clear, *args) applied in after_request
+
+        if request.path.startswith("/static/"):
+            return                            # static assets never need a user
+
+        access = request.cookies.get("up_access")
+        username = None
         try:
-            p = auth_service.decode_access_token(token)
-            g.current_user = {"username": p["sub"], "display_name": p.get("name", p["sub"]),
-                              "role": p["role"], "department": p.get("dept")}
+            if access:
+                username = auth_service.decode_access_token(access)["sub"]
         except auth_service.AuthError:
-            g.current_user = None
+            username = None
+
+        if username is None:                  # missing / expired — try the refresh cookie
+            rtok = request.cookies.get("up_refresh")
+            if rtok:
+                try:
+                    res = auth_service.refresh(rtok)
+                    if res.success:
+                        username = res.user["username"]
+                        g._auth_cookie_action = ("set", res.access_token, res.refresh_token)
+                except auth_service.AuthError:
+                    username = None
+
+        if username is None:
+            if access or request.cookies.get("up_refresh"):
+                g._auth_cookie_action = ("clear",)
+            return
+
+        from db import users as _users
+        rec = _users.get_by_username(username)
+        if not rec or not rec.get("is_active", True):
+            g._auth_cookie_action = ("clear",)
+            return
+
+        g.current_user = {"username": rec["username"],
+                          "display_name": rec.get("display_name") or rec["username"],
+                          "role": rec["role"],          # authoritative role, from the DB
+                          "department": rec.get("department"),
+                          "must_change_pin": bool(rec.get("must_change_pin"))}
+
+    @app.after_request
+    def _apply_auth_cookie(resp):
+        from blueprints.auth import clear_session_cookies, set_session_cookies
+        action = g.get("_auth_cookie_action")
+        if action and action[0] == "set":
+            set_session_cookies(resp, action[1], action[2])
+        elif action and action[0] == "clear":
+            clear_session_cookies(resp)
+        return resp
+
+    @app.before_request
+    def _enforce_pin_change():
+        """A user flagged must_change_pin can only reach the set-PIN screen,
+        logout, and static assets until they choose a new PIN."""
+        user = g.get("current_user")
+        if not user or not user.get("must_change_pin"):
+            return
+        allowed = {"/profile", "/profile/pin", "/logout", "/set-pin", "/set-pin/submit"}
+        if request.path in allowed or request.path.startswith("/static/"):
+            return
+        return redirect("/set-pin")
 
     @app.template_filter("when")
     def _when(ts):
@@ -74,17 +160,12 @@ def create_app() -> Flask:
 
     @app.get("/healthz")
     def healthz():
-        return {"ok": True, "db": pool.STATE["mode"]}
+        return {"ok": True, "db": pool.STATE["mode"], "env": Config.APP_ENV}
 
     return app
 
 
 if __name__ == "__main__":
     _app = create_app()
-    from db import pool
-    if pool.is_memory() and os.environ.get("SEED_DEMO", "1") == "1":
-        # in-memory dev run — load a realistic demo campus so the admin views are populated
-        from scripts import seed_demo
-        print("[demo]", seed_demo.build())
     _app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)),
              debug=os.environ.get("FLASK_DEBUG") == "1")

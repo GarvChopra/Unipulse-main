@@ -30,6 +30,43 @@ import time
 import uuid
 from typing import Optional
 
+# Downscale every evidence photo to this longest edge and re-encode as JPEG
+# before it is stored. A 12 MP phone photo (~4-8 MB) becomes ~150-350 KB — small
+# enough to sit in a DB cell in passthrough mode and well under the 16 MB
+# request cap. Client-side resize (static/js/report.js) is a first pass; this is
+# the authoritative one.
+MAX_EDGE = 1600
+JPEG_QUALITY = 82
+
+try:
+    from PIL import Image, ImageOps
+    _PIL_OK = True
+except ImportError:  # pragma: no cover - Pillow is a hard dependency in prod
+    Image = ImageOps = None
+    _PIL_OK = False
+
+
+def compress(image_b64: str, mime: str = "image/jpeg") -> tuple[str, str]:
+    """Return (possibly smaller base64, mime). Never raises: on any failure the
+    input is returned unchanged so a report is never lost to a bad photo."""
+    if not image_b64 or not _PIL_OK:
+        return image_b64, mime
+    try:
+        raw = base64.b64decode(image_b64)
+        img = Image.open(io.BytesIO(raw))
+        img = ImageOps.exif_transpose(img)          # honour phone orientation
+        if max(img.size) <= MAX_EDGE and len(raw) < 900_000:
+            return image_b64, mime
+        img.thumbnail((MAX_EDGE, MAX_EDGE))
+        if img.mode not in ("RGB", "L"):
+            img = img.convert("RGB")
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=JPEG_QUALITY, optimize=True)
+        return base64.b64encode(buf.getvalue()).decode(), "image/jpeg"
+    except Exception as exc:  # noqa: BLE001
+        print(f"[storage_service] compress skipped: {type(exc).__name__}: {exc}")
+        return image_b64, mime
+
 # ─────────────────────────────────────────────────────────────────────────────
 #  PROVIDER DETECTION (evaluated once at import time)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -57,6 +94,22 @@ print(f'[storage_service] provider={_PROVIDER}')
 def is_configured() -> bool:
     """Return True if actual object storage is available (not passthrough)."""
     return _PROVIDER in ('r2', 's3', 'local')
+
+
+def warn_if_unconfigured() -> None:
+    """Called once at startup. In production, an unconfigured object store means
+    evidence photos are base64-inlined into the database — workable for a small
+    pilot but it must be a conscious choice, so make it loud."""
+    import logging
+    log = logging.getLogger("unifix.storage")
+    if _PROVIDER == 'passthrough':
+        from config import Config
+        msg = ("evidence photos are stored INLINE (base64 data-URIs in the "
+               "database) — no object storage configured. Set the R2_* (or AWS "
+               "S3_*) variables for a real deployment.")
+        (log.warning if Config.is_production() else log.info)("storage: %s", msg)
+    else:
+        log.info("storage: provider=%s", _PROVIDER)
 
 
 def provider_name() -> str:
@@ -88,6 +141,8 @@ def upload_image(
     """
     if not image_b64:
         return ''
+
+    image_b64, mime = compress(image_b64, mime)
 
     if _PROVIDER == 'passthrough':
         # Return data-URL as before Phase 5 — no breakage

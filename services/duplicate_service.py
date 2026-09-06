@@ -9,13 +9,15 @@ from domain.constants import RECURRING_WINDOW_DAYS
 _DAY = 86400.0
 
 
-def find_recurring(location_label: str, category, reporter_id, now: float | None = None) -> dict:
+def find_recurring(location_label: str, category, reporter_id, now: float | None = None,
+                   location_id=None) -> dict:
     now = time.time() if now is None else now
     if not category:
         return {"same_reporter_recent": False, "candidates": [], "match": False}
 
     since = now - RECURRING_WINDOW_DAYS * _DAY
-    candidates = grievances.find_recurring_candidates(location_label, category, since)
+    candidates = grievances.find_recurring_candidates(location_label, category, since,
+                                                     location_id=location_id)
 
     same_reporter_recent = any(
         c.get("reporter_id") == reporter_id and (c.get("created_at") or 0) >= now - _DAY

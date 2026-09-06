@@ -59,7 +59,8 @@ def submit(sub: dict) -> dict:
     affects = bool(sub.get("affects_academics"))
 
     # 3. recurring / duplicate
-    dup = duplicate_service.find_recurring(label, category, sub["reporter_id"])
+    dup = duplicate_service.find_recurring(label, category, sub["reporter_id"],
+                                           location_id=sub.get("location_id"))
     if dup["same_reporter_recent"]:
         raise SubmissionError([
             "You already reported this exact issue in the last 24 hours. "
@@ -84,7 +85,8 @@ def submit(sub: dict) -> dict:
         title=title, description=description,
         category=category, severity=severity,
         priority_score=priority,
-        location_type=sub["location_type"], block_no=sub.get("block_no"),
+        location_type=sub["location_type"], location_id=sub.get("location_id"),
+        block_no=sub.get("block_no"),
         floor=sub.get("floor"), room=sub.get("room"), sub_zone=sub.get("sub_zone"),
         location_label=label,
         noticed_at=sub.get("noticed_at"), affects_academics=affects,

@@ -14,10 +14,21 @@
   <div class="row">
     <select id="f-unit"><option value="">Any unit</option>
       {% for u in units %}<option>{{ u }}</option>{% endfor %}</select>
-    <select id="f-loc"><option value="">Any location</option>
+    <select id="f-loc"><option value="">Any location type</option>
       {% for t in location_types %}<option value="{{ t.key }}">{{ t.name }}</option>{% endfor %}</select>
     <select id="f-sort"><option value="priority">Priority</option>
       <option value="created">Newest</option><option value="due">Due date</option></select>
+  </div>
+  <div class="row">
+    <select id="f-building"><option value="">Any building</option>
+      {% for b in loc.buildings %}<option>{{ b }}</option>{% endfor %}</select>
+    <select id="f-floor"><option value="">Any floor</option>
+      {% for f in loc.floors %}<option>{{ f }}</option>{% endfor %}</select>
+  </div>
+  <div class="row">
+    <select id="f-facility"><option value="">Any facility</option>
+      {% for f in loc.facilities %}<option>{{ f }}</option>{% endfor %}</select>
+    <input id="f-room" placeholder="Room no.">
   </div>
 </div>
 

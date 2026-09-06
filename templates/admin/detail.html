@@ -40,7 +40,7 @@
   </div>
   {% if group %}
   <div class="chart-card"><h4>Related reports</h4>
-    <p class="muted">{{ group.report_count }} reports from {{ group.reporter_count }} faculty for the same location + category.</p>
+    <p class="muted">{{ group.report_count }} reports from {{ group.reporter_count }} employees for the same location + category.</p>
     {% for m in members %}<a href="/admin/grievances/{{ m.code }}" class="chip {{ m.status }}" style="margin:2px 4px 2px 0;display:inline-block">{{ m.code }}</a>{% endfor %}
   </div>
   {% endif %}

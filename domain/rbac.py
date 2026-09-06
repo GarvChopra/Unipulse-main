@@ -1,4 +1,15 @@
-"""Role-based access control. Stdlib + flask only (decorator)."""
+"""Role-based access control. Stdlib + flask only (decorator).
+
+Admin tiers
+-----------
+The MVP intentionally has a SINGLE admin tier: every `admin` account holds the
+full `_ADMIN` permission set, including creating other admins. This is a
+deliberate product decision (one campus coordinator, "Sir"), not an oversight.
+`User.role` stays generic (`reporter` / `admin`) so a second coordinator can be
+added with no schema change; if a lower-privilege admin tier is ever needed,
+add a new role here and split `_ADMIN`. Admin creation is still whitelisted
+(`users.VALID_ROLES`) and written to the global audit trail as `admin.create`.
+"""
 from __future__ import annotations
 
 import functools

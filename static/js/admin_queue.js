@@ -1,12 +1,17 @@
 (() => {
-  const ids = ["f-status", "f-category", "f-unit", "f-loc", "f-search", "f-sort"];
-  const v = (id) => document.getElementById(id).value;
+  const ids = ["f-status", "f-category", "f-unit", "f-loc", "f-search", "f-sort",
+               "f-building", "f-floor", "f-facility", "f-room"];
+  const v = (id) => { const el = document.getElementById(id); return el ? el.value : ""; };
   const q = () => {
     const p = new URLSearchParams();
     if (v("f-status")) p.set("status", v("f-status"));
     if (v("f-category")) p.set("category", v("f-category"));
     if (v("f-unit")) p.set("unit", v("f-unit"));
     if (v("f-loc")) p.set("location_type", v("f-loc"));
+    if (v("f-building")) p.set("building", v("f-building"));
+    if (v("f-floor")) p.set("floor", v("f-floor"));
+    if (v("f-facility")) p.set("facility", v("f-facility"));
+    if (v("f-room")) p.set("room", v("f-room"));
     if (v("f-search")) p.set("search", v("f-search"));
     p.set("sort", v("f-sort"));
     return p.toString();
@@ -36,6 +41,9 @@
       </a>`;
     }).join("");
   };
-  ids.forEach((id) => document.getElementById(id).addEventListener("input", load));
+  ids.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener("input", load);
+  });
   load();
 })();

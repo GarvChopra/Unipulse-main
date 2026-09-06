@@ -94,7 +94,7 @@ def test_photo_route_serves_and_is_owner_gated(client):
 def test_manifest_and_sw_served(client):
     m = client.get("/static/manifest.webmanifest")
     assert m.status_code == 200
-    assert b"UniPulse" in m.data
+    assert b"UNIFIX" in m.data
     sw = client.get("/static/service-worker.js")
     assert sw.status_code == 200
     icon = client.get("/static/icons/icon-192.png")

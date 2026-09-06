@@ -76,6 +76,27 @@ def profile_pin():
     return redirect("/profile?ok=1")
 
 
+@bp.post("/profile/delete")
+def profile_delete():
+    u = users.get_by_username(g.current_user["username"])
+    users.request_deletion(u["id"])
+    audit.add(u["username"], "user.deletion_requested", target_type="user",
+              target_id=u["id"])
+    try:
+        from services import notification_service
+        from config import Config
+        notification_service._safe(
+            Config.ADMIN_ALERT_EMAIL, "[UNIFIX] Account deletion request",
+            f"<p>{u['display_name']} (@{u['username']}) requested account deletion. "
+            f"Complete it from /admin/users.</p>")
+    except Exception:  # noqa: BLE001
+        pass
+    resp = redirect("/login")
+    resp.set_cookie("up_access", "", expires=0, path="/")
+    resp.set_cookie("up_refresh", "", expires=0, path="/")
+    return resp
+
+
 @bp.get("/notices")
 def notices_page():
     return render_template("faculty/notices.html", notices=notices.list_published())
@@ -125,17 +146,30 @@ def report_analyze():
 @bp.post("/report")
 def report_submit():
     d = request.get_json(silent=True) or {}
-    label = build_location_label(
-        d.get("location_type"), d.get("block_no"), d.get("floor"),
-        d.get("room"), d.get("sub_zone"), type_names=_TYPE_NAMES,
-    )
+
+    # Preferred path: the reporter picked a node from the campus location tree.
+    # Fallback: legacy free-text fields (kept so nothing that already works breaks).
+    loc_id = d.get("location_id")
+    if loc_id:
+        resolved = locations.resolve_for_grievance(
+            loc_id, room_free=d.get("room"), area_free=d.get("sub_zone"))
+    else:
+        resolved = {}
+    loc = {
+        "location_id": resolved.get("location_id"),
+        "location_type": resolved.get("location_type") or d.get("location_type"),
+        "block_no": resolved.get("block_no") or d.get("block_no"),
+        "floor": resolved.get("floor") or d.get("floor"),
+        "room": resolved.get("room") or d.get("room"),
+        "sub_zone": resolved.get("sub_zone") or d.get("sub_zone"),
+        "location_label": resolved.get("location_label") or build_location_label(
+            d.get("location_type"), d.get("block_no"), d.get("floor"),
+            d.get("room"), d.get("sub_zone"), type_names=_TYPE_NAMES),
+    }
     sub = {
         "reporter_id": _uid(),
         "description": (d.get("description") or "").strip(),
-        "location_type": d.get("location_type"),
-        "block_no": d.get("block_no"), "floor": d.get("floor"),
-        "room": d.get("room"), "sub_zone": d.get("sub_zone"),
-        "location_label": label,
+        **loc,
         "photo_b64": d.get("photo_b64"), "photo_mime": d.get("photo_mime", "image/jpeg"),
         "category": d.get("category"),
         "severity": d.get("severity"),

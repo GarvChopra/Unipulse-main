@@ -12,7 +12,7 @@ _URL = "https://api.groq.com/openai/v1/chat/completions"
 _TIMEOUT = 20
 
 _SYSTEM = (
-    f"You triage infrastructure grievances reported by faculty at {GLB['name']}. "
+    f"You triage infrastructure grievances reported by employees at {GLB['name']}. "
     f"Classify each report into exactly ONE category from this list: {', '.join(CATEGORIES)}. "
     "Estimate severity as low, medium, or high (high = safety risk, total loss of a "
     "critical service, or many people affected). Write a single-sentence plain summary. "

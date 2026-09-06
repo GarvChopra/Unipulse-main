@@ -7,6 +7,7 @@ from domain.constants import CODE_PAD, CODE_PREFIX
 _COLS = (
     "id", "code", "reporter_id", "reporter_name", "title", "description", "category",
     "category_confirmed", "severity", "priority_score", "status", "location_type",
+    "location_id",
     "block_no", "floor", "room", "sub_zone", "location_label", "responsible_unit",
     "assignee", "assigned_at", "due_at", "recurring_group_id", "ai_summary",
     "ai_confidence", "spam_flag", "noticed_at", "affects_academics",
@@ -15,7 +16,8 @@ _COLS = (
 )
 _DEFAULTS = {
     "category": None, "category_confirmed": False, "severity": None, "priority_score": 0,
-    "status": "reported", "block_no": None, "floor": None, "room": None, "sub_zone": None,
+    "status": "reported", "location_id": None,
+    "block_no": None, "floor": None, "room": None, "sub_zone": None,
     "responsible_unit": None, "assignee": None, "assigned_at": None, "due_at": None,
     "recurring_group_id": None, "ai_summary": None, "ai_confidence": None, "spam_flag": False,
     "noticed_at": None, "affects_academics": False,
@@ -46,6 +48,7 @@ def insert(**f) -> dict:
     if pool.is_memory():
         row["id"] = pool.next_seq("grievance_id")
         _mem().append(row)
+        _bust_all_cache()
         return dict(row)
     cols = [c for c in _COLS if c != "id"]
     with pool.connection() as conn, conn.cursor() as cur:
@@ -56,6 +59,7 @@ def insert(**f) -> dict:
         )
         row["id"] = cur.fetchone()[0]
         conn.commit()
+    _bust_all_cache()
     return dict(row)
 
 
@@ -76,12 +80,40 @@ def get_by_id(gid: int):
     return _get("id", gid)
 
 
-def _all():
+def _fetch_all():
     if pool.is_memory():
         return [dict(g) for g in _mem()]
     with pool.connection() as conn, conn.cursor() as cur:
         cur.execute(f"SELECT {', '.join(_COLS)} FROM grievances")
         return [dict(zip(_COLS, r)) for r in cur.fetchall()]
+
+
+def _all():
+    """All grievance rows. Cached per-request because a single admin page
+    (dashboard = KPIs + Pulse + overdue + recurring + …) fans out into ~10
+    identical full-table scans; against a remote Postgres that is seconds.
+    `update()` / `insert()` bust the cache so a later read in the same request
+    is fresh, and `get_by_id`/`get_by_code` query by key and never touch this."""
+    try:
+        from flask import g, has_request_context
+        if has_request_context():
+            rows = getattr(g, "_grv_all_cache", None)
+            if rows is None:
+                rows = _fetch_all()
+                g._grv_all_cache = rows
+            return rows
+    except Exception:  # noqa: BLE001
+        pass
+    return _fetch_all()
+
+
+def _bust_all_cache():
+    try:
+        from flask import g, has_request_context
+        if has_request_context() and hasattr(g, "_grv_all_cache"):
+            del g._grv_all_cache
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def list_for_reporter(reporter_id: int):
@@ -96,12 +128,14 @@ def update(gid: int, **fields) -> dict:
         for g in _mem():
             if g["id"] == gid:
                 g.update(patch)
+                _bust_all_cache()
                 return dict(g)
         raise KeyError(gid)
     sets = ", ".join(f"{k}=%s" for k in patch)
     with pool.connection() as conn, conn.cursor() as cur:
         cur.execute(f"UPDATE grievances SET {sets} WHERE id=%s", [*patch.values(), gid])
         conn.commit()
+    _bust_all_cache()
     return get_by_id(gid)
 
 
@@ -113,8 +147,11 @@ _SORTS = {
 
 
 def list_query(*, status=None, category=None, responsible_unit=None, location_type=None,
-               search=None, sort="priority", limit=200):
+               building=None, floor=None, room=None, facility=None,
+               search=None, sort="priority", limit=200, created_since=None):
     rows = _all()
+    if created_since is not None:
+        rows = [g for g in rows if (g["created_at"] or 0) >= created_since]
     if status:
         rows = [g for g in rows if g["status"] == status]
     if category:
@@ -123,6 +160,17 @@ def list_query(*, status=None, category=None, responsible_unit=None, location_ty
         rows = [g for g in rows if g["responsible_unit"] == responsible_unit]
     if location_type:
         rows = [g for g in rows if g["location_type"] == location_type]
+    if building:
+        rows = [g for g in rows if g["location_type"] == "academics_block"
+                and g["block_no"] == building]
+    if facility:
+        rows = [g for g in rows if g["location_type"] in ("facility", "mess_canteen",
+                "hostels", "playground") and g["block_no"] == facility]
+    if floor:
+        rows = [g for g in rows if g["floor"] == floor]
+    if room:
+        r = room.lower()
+        rows = [g for g in rows if r in (g["room"] or "").lower()]
     if search:
         s = search.lower()
         rows = [g for g in rows if s in (g["code"] or "").lower()
@@ -132,9 +180,19 @@ def list_query(*, status=None, category=None, responsible_unit=None, location_ty
     return rows[:limit]
 
 
-def find_recurring_candidates(location_label: str, category: str, since_ts: float):
+def find_recurring_candidates(location_label: str, category: str, since_ts: float,
+                              location_id=None):
+    """Same place + same category, still open, inside the window. When a
+    catalogued location_id is available we match on it (so "AB1 > 2nd Floor >
+    204" reported twice groups even if the label text differs); otherwise we
+    fall back to the exact location_label string."""
+    def same_place(g):
+        if location_id is not None and g.get("location_id") is not None:
+            return g["location_id"] == location_id
+        return g["location_label"] == location_label
+
     return [g for g in _all()
-            if g["location_label"] == location_label
+            if same_place(g)
             and g["category"] == category
             and g["status"] != "closed"
             and (g["created_at"] or 0) >= since_ts]

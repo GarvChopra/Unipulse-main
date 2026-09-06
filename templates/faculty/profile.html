@@ -26,4 +26,16 @@
 </div>
 
 <a class="btn ghost" href="/logout">Log out</a>
+
+<h3 style="margin-top:28px">Privacy</h3>
+<div class="card">
+  <p class="tiny muted" style="margin-top:0">
+    <a href="/privacy">Privacy Policy</a> &middot;
+    <a href="/account-deletion">How account deletion works</a>
+  </p>
+  <form method="post" action="/profile/delete"
+        onsubmit="return confirm('Delete your UNIFIX account? You will be signed out and the administrator will be notified. This cannot be undone.');">
+    <button class="btn danger sm" type="submit">Delete my account</button>
+  </form>
+</div>
 {% endblock %}
