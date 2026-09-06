@@ -1,10 +1,15 @@
-const CACHE = "unifix-shell-v2";
-const SHELL = ["/", "/report", "/my-reports", "/notices", "/offline",
-               "/static/css/app.css", "/static/js/report.js",
+const CACHE = "unifix-shell-v3";
+// Precache only assets that are public and never redirect — a single failed or
+// redirected (login-gated) request would abort the whole install.
+const SHELL = ["/offline", "/static/css/app.css", "/static/js/report.js",
                "/static/icons/icon-192.png"];
 
 self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  e.waitUntil((async () => {
+    const c = await caches.open(CACHE);
+    await Promise.allSettled(SHELL.map((u) => c.add(u)));
+    await self.skipWaiting();
+  })());
 });
 
 self.addEventListener("activate", (e) => {

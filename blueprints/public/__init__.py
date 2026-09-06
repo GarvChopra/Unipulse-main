@@ -2,7 +2,7 @@
 deletion information, and the Digital Asset Links file that verifies the TWA."""
 import os
 
-from flask import Blueprint, Response, render_template
+from flask import Blueprint, Response, current_app, render_template, send_from_directory
 
 from domain.constants import GLB
 
@@ -10,6 +10,18 @@ bp = Blueprint("public", __name__, template_folder="../../templates")
 
 CONTACT_EMAIL = os.environ.get("PRIVACY_CONTACT_EMAIL", "").strip() \
     or f"unifix@{GLB['email_domain']}"
+
+
+@bp.get("/service-worker.js")
+def service_worker():
+    """Serve the service worker from the site root so its scope is '/' (a worker
+    served from /static/ can only control /static/, which means Chrome never
+    fires beforeinstallprompt on the app pages)."""
+    resp = send_from_directory(current_app.static_folder, "service-worker.js",
+                               mimetype="application/javascript")
+    resp.headers["Service-Worker-Allowed"] = "/"
+    resp.headers["Cache-Control"] = "no-cache"
+    return resp
 
 
 @bp.get("/get-app")

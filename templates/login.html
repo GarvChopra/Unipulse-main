@@ -74,7 +74,7 @@
 <script>
 (function(){
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("{{ url_for('static', filename='service-worker.js') }}");
+    navigator.serviceWorker.register("/service-worker.js");
   }
   var DISMISS_KEY = "unifix_pwa_dismiss";
   var modal = document.getElementById("pwa-install-modal");

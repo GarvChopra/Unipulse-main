@@ -10,6 +10,15 @@ def test_service_worker_has_offline_fallback(client):
     assert 'req.mode === "navigate"' in sw
 
 
+def test_service_worker_served_at_root_with_scope_header(client):
+    # must be reachable from "/" so its scope covers the whole app, otherwise
+    # Chrome never fires beforeinstallprompt on the app pages
+    r = client.get("/service-worker.js")
+    assert r.status_code == 200
+    assert r.headers.get("Service-Worker-Allowed") == "/"
+    assert b"self.addEventListener" in r.data
+
+
 def test_login_page_has_install_nudge(client):
     r = client.get("/login")
     assert r.status_code == 200

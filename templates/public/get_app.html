@@ -38,26 +38,36 @@
 
 <script>
 (function(){
-  if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("{{ url_for('static', filename='service-worker.js') }}");
-  }
+  var installBtn = document.getElementById("pwa-install-now");
+  var steps = document.getElementById("pwa-steps");
   var deferredPrompt = null;
+
   window.addEventListener("beforeinstallprompt", function(e){
     e.preventDefault();
     deferredPrompt = e;
   });
+  window.addEventListener("appinstalled", function(){
+    deferredPrompt = null;
+    steps.textContent = "Installed. You can open UNIFIX from your home screen.";
+    steps.hidden = false;
+    installBtn.hidden = true;
+  });
 
-  var installBtn = document.getElementById("pwa-install-now");
-  var steps = document.getElementById("pwa-steps");
+  // Register the service worker (scope '/') — Chrome only offers the native
+  // install prompt once a worker controls the page.
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/service-worker.js").catch(function(){});
+  }
 
   installBtn.addEventListener("click", async function(){
     if (!deferredPrompt) {
-      // beforeinstallprompt can land a beat after page load - give it a moment
+      // the event can land a couple of seconds after load (esp. right after the
+      // service worker first activates) — wait briefly before falling back
       installBtn.disabled = true;
       var waited = 0;
-      while (!deferredPrompt && waited < 1200) {
-        await new Promise(function(r){ setTimeout(r, 100); });
-        waited += 100;
+      while (!deferredPrompt && waited < 3000) {
+        await new Promise(function(r){ setTimeout(r, 150); });
+        waited += 150;
       }
       installBtn.disabled = false;
     }
@@ -71,8 +81,9 @@
     }
     var ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
     steps.innerHTML = ios
-      ? 'In Safari, tap the <b>Share</b> button, then <b>Add to Home Screen</b>.'
-      : 'Open your browser menu and choose <b>Install app</b> / <b>Add to Home screen</b>.';
+      ? 'On iPhone/iPad: tap the <b>Share</b> button in Safari, then <b>Add to Home Screen</b>.'
+      : 'If nothing popped up, UNIFIX may already be installed. Otherwise open your '
+        + 'browser menu and choose <b>Install app</b> / <b>Add to Home screen</b>.';
     installBtn.hidden = true;
     steps.hidden = false;
   });
