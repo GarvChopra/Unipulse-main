@@ -17,6 +17,8 @@ def test_login_page_has_install_modal(client):
     assert b"beforeinstallprompt" in r.data
     assert b"Android app coming soon" in r.data
     assert b"install instantly" in r.data.lower()
+    # dismissible + re-openable from a footer link
+    assert b'id="pwa-get-app"' in r.data
 
 
 def test_home_page_has_no_floating_install_button(client):

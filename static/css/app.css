@@ -243,6 +243,8 @@ img.evidence{max-width:100%;border-radius:var(--r-sm);border:1px solid var(--lin
 .pwa-modal__foot{text-align:center;margin-top:14px}
 .pwa-modal__foot button{border:0;background:transparent;color:var(--green);font:inherit;font-size:12.5px;
   font-weight:700;cursor:pointer}
+.pwa-get-app{border:0;background:transparent;color:var(--green);font:inherit;font-size:12.5px;
+  font-weight:700;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 
 @media(min-width:640px){ body{background:var(--bg)} }
 :focus-visible{outline:3px solid var(--green);outline-offset:2px}

@@ -40,6 +40,10 @@
 
     <p class="tiny muted" id="hint" style="text-align:center;margin-top:14px">
       Employee accounts are created by the campus admin.</p>
+
+    <p style="text-align:center;margin-top:10px">
+      <button type="button" class="pwa-get-app" id="pwa-get-app">Get the UNIFIX app</button>
+    </p>
   </div>
 
   <p class="auth-foot">Together for a cleaner, safer &amp; smarter GL Bajaj campus</p>
@@ -59,6 +63,7 @@
       <button type="button" class="btn" disabled>Android app coming soon</button>
       <p class="pwa-modal__hint">Use the instant install option below in the meantime.</p>
       <button type="button" class="btn ghost" id="pwa-install-now">Or install instantly (no download)</button>
+      <p class="pwa-modal__steps" id="pwa-modal-steps" hidden></p>
     </div>
     <div class="pwa-modal__foot">
       <button type="button" id="pwa-modal-dismiss">Open UNIFIX in your browser</button>
@@ -79,8 +84,8 @@
   });
 
   var modal = document.getElementById("pwa-install-modal");
-  var actions = document.getElementById("pwa-modal-actions");
   var installBtn = document.getElementById("pwa-install-now");
+  var steps = document.getElementById("pwa-modal-steps");
 
   function installed(){
     return window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
@@ -92,9 +97,16 @@
     try { localStorage.setItem(DISMISS_KEY, "1"); } catch (e) {}
   }
   function close(){ modal.hidden = true; }
+  function open(){
+    steps.hidden = true;
+    installBtn.hidden = false;
+    installBtn.disabled = false;
+    modal.hidden = false;
+  }
 
   document.getElementById("pwa-modal-x").addEventListener("click", function(){ remember(); close(); });
   document.getElementById("pwa-modal-dismiss").addEventListener("click", function(){ remember(); close(); });
+  document.getElementById("pwa-get-app").addEventListener("click", open);
   modal.addEventListener("click", function(e){ if (e.target === modal) close(); });
 
   installBtn.addEventListener("click", async function(){
@@ -118,9 +130,11 @@
       return;
     }
     var ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
-    actions.innerHTML = ios
-      ? '<p class="pwa-modal__steps">In Safari, tap the <b>Share</b> button, then <b>Add to Home Screen</b>.</p>'
-      : '<p class="pwa-modal__steps">Open your browser menu and choose <b>Install app</b> / <b>Add to Home screen</b>.</p>';
+    steps.innerHTML = ios
+      ? 'In Safari, tap the <b>Share</b> button, then <b>Add to Home Screen</b>.'
+      : 'Open your browser menu and choose <b>Install app</b> / <b>Add to Home screen</b>.';
+    installBtn.hidden = true;
+    steps.hidden = false;
   });
 
   if (!installed() && !dismissed()) {
