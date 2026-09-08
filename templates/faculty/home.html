@@ -35,18 +35,4 @@
   <a class="tiny" href="/notices">All notices ›</a>
 </div>
 {% endif %}
-
-{% if recent %}
-<h3>Recent</h3>
-{% for r in recent %}
-<a class="card rcard" href="/grievance/{{ r.code }}">
-  <div class="top">
-    <div><div class="code">{{ r.code }}</div><div class="cat">{{ r.category or 'Pending review' }}</div></div>
-    <span class="badge-pri {{ r.severity or 'medium' }}">{{ (r.severity or 'medium')|capitalize }}</span>
-  </div>
-  <div class="loc">{{ r.location_label }}</div>
-  <div class="foot"><span class="chip {{ r.status }}">{{ r.status.replace('_',' ') }}</span></div>
-</a>
-{% endfor %}
-{% endif %}
 {% endblock %}
