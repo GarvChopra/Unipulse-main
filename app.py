@@ -162,6 +162,23 @@ def create_app() -> Flask:
     def healthz():
         return {"ok": True, "db": pool.STATE["mode"], "env": Config.APP_ENV}
 
+    @app.errorhandler(403)
+    def _forbidden(_e):
+        """A recoverable page instead of Werkzeug's bare "Forbidden" text.
+
+        This is what a faculty account sees on an /admin URL, and — historically
+        — what an installed PWA could get stuck on when a service worker had
+        cached an old 403. The page always offers a way back and can reset the
+        app's cached data itself."""
+        from flask import render_template, request
+        user = g.get("current_user")
+        wants_json = request.path.endswith("/data") or request.path.startswith("/api/") \
+            or request.accept_mimetypes.best == "application/json"
+        if wants_json:
+            return {"error": "forbidden"}, 403
+        return render_template("errors/403.html", user=user,
+                               admin_area=request.path.startswith("/admin")), 403
+
     return app
 
 

@@ -10,4 +10,4 @@ def test_admin_can_see_dashboard(client):
     r = client.get("/admin")
     assert r.status_code == 200
     assert b"Campus Overview" in r.data
-    assert b"Infrastructure Pulse" in r.data
+    assert b"Quick actions" in r.data

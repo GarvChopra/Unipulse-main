@@ -1,57 +1,78 @@
 {% extends "base_admin.html" %}
+{% import "admin/_components.html" as ui %}
 {% block title %}Dashboard{% endblock %}
+
 {% block content %}
-<h1 class="a-h2">Campus Overview</h1>
+{% set overdue_cols = [
+  {"key": "code", "label": "Code", "fmt": "link"},
+  {"key": "category", "label": "Category"},
+  {"key": "location", "label": "Location"},
+  {"key": "unit", "label": "Unit"},
+  {"key": "status", "label": "Status", "fmt": "chip"},
+  {"key": "due", "label": "Overdue by", "fmt": "due", "align": "num"},
+] %}
+{% set recurring_cols = [
+  {"key": "title", "label": "Issue", "fmt": "link"},
+  {"key": "category", "label": "Category"},
+  {"key": "location", "label": "Location"},
+  {"key": "people", "label": "Reporters"},
+  {"key": "reports", "label": "Reports", "align": "num"},
+] %}
 
-<div class="kpi-grid">
-  <div class="kpi-tile"><div class="n">{{ kpis.total }}</div><div class="l">Total</div></div>
-  <div class="kpi-tile"><div class="n">{{ kpis.open }}</div><div class="l">Open</div></div>
-  <div class="kpi-tile"><div class="n">{{ kpis.in_progress }}</div><div class="l">In Progress</div></div>
-  <div class="kpi-tile ok"><div class="n">{{ kpis.resolved }}</div><div class="l">Resolved</div></div>
-  <div class="kpi-tile alert"><div class="n">{{ kpis.sla_breaches }}</div><div class="l">SLA Breaches</div></div>
-  <div class="kpi-tile warn"><div class="n">{{ kpis.recurring }}</div><div class="l">Recurring</div></div>
+<div class="ax-page-head">
+  <div class="ax-ph-l">
+    <h2>Campus Overview</h2>
+    <p>Infrastructure intelligence for GL Bajaj &middot; refreshed {{ d.generated_at | when }}</p>
+  </div>
+  <div class="ax-ph-r">
+    <div class="ax-seg" role="group" aria-label="Timeframe">
+      {% for days, label in d.ranges %}
+      <a href="{{ url_for('admin.dashboard') }}?range={{ days }}" class="{{ 'on' if days == d.range_days }}"
+         {{ 'aria-current=true' if days == d.range_days }}>{{ label }}</a>
+      {% endfor %}
+    </div>
+    <a class="ax-btn ghost" href="/admin/reports">{{ ui.icon('download') }} Export</a>
+  </div>
 </div>
 
-<div class="a-section">Infrastructure Pulse</div>
-<div class="chart-card">
-  {% for d in pulse %}
-  <div class="pbar">
-    <div class="row"><span>{{ d.name }}</span><b>{{ d.score }}%</b></div>
-    <div class="track"><i class="{{ 'low' if d.score < 50 else 'mid' if d.score < 75 else '' }}"
-      style="width:{{ d.score }}%"></i></div>
+<div class="ax-stack">
+
+  <div class="ax-kpis">
+    {% for k in d.kpis %}
+    {{ ui.stat(k.label, k.value, sub=k.sub, delta=k.delta, tone=k.tone, icon_name=k.icon, href=k.href) }}
+    {% endfor %}
   </div>
-  {% endfor %}
-</div>
 
-<div class="a-section">Overdue issues</div>
-{% for g in overdue %}
-<a class="g-card" href="/admin/grievances/{{ g.code }}">
-  <div class="accent high"></div>
-  <div class="body">
-    <div class="code">{{ g.code }}</div>
-    <div class="cat">{{ g.category or 'Unclassified' }}</div>
-    <div class="meta">{{ g.location_label }}</div>
+  <div class="ax-strip">
+    <div class="ax-strip-c">
+      <div class="ax-strip-l">Faculty accounts</div>
+      <div class="ax-strip-n">{{ d.employees.total }}</div>
+    </div>
+    <div class="ax-strip-c">
+      <div class="ax-strip-l">Active</div>
+      <div class="ax-strip-n">{{ d.employees.active }} <small>/ {{ d.employees.total }}</small></div>
+    </div>
+    <div class="ax-strip-c">
+      <div class="ax-strip-l">Coordinators</div>
+      <div class="ax-strip-n">{{ d.employees.admins }}</div>
+    </div>
+    <div class="ax-strip-c {{ 'alert' if d.employees.pending_deletion }}">
+      <div class="ax-strip-l">Deletion requests</div>
+      <div class="ax-strip-n">{{ d.employees.pending_deletion }}</div>
+    </div>
   </div>
-  <div class="side"><span class="chip {{ g.status }}">{{ g.status.replace('_',' ') }}</span>
-    <span class="tiny" style="color:var(--alert);font-weight:800">Overdue</span></div>
-</a>
-{% else %}<p class="a-sub">Nothing overdue right now.</p>{% endfor %}
 
-<div class="a-section">Active recurring issues</div>
-{% for r in recurring %}
-<a class="g-card" href="/admin/recurring">
-  <div class="accent"></div>
-  <div class="body"><div class="cat">{{ r.title }}</div>
-    <div class="meta">{{ r.report_count }} reports from {{ r.reporter_count }} employees</div></div>
-  <div class="side"><span class="chip open">recurring</span></div>
-</a>
-{% else %}<p class="a-sub">None.</p>{% endfor %}
+  {% call ui.panel("Quick actions", body_class="tight") %}
+    {{ ui.quick_actions(d.quick_actions, row=True) }}
+  {% endcall %}
 
-<div class="a-section">Recent activity</div>
-<div class="chart-card">
-  {% for a in activity %}
-  <div class="kv"><span class="k">{{ a.action }}</span>
-    <span class="v">{{ a.target_id or '' }} <span class="muted" style="font-weight:500">&middot; {{ a.actor }}</span></span></div>
-  {% endfor %}
+  {% call ui.panel("Overdue issues", act_label="Open queue", act_href="/admin/grievances?sort=due", body_class="flush") %}
+    {{ ui.datatable(overdue_cols, d.overdue_rows, "Nothing overdue", "Every open issue is still within its SLA window.") }}
+  {% endcall %}
+
+  {% call ui.panel("Active recurring issues", act_label="All recurring", act_href="/admin/recurring", body_class="flush") %}
+    {{ ui.datatable(recurring_cols, d.recurring_rows, "No recurring issues", "Repeat faults at one location are grouped here automatically.") }}
+  {% endcall %}
+
 </div>
 {% endblock %}

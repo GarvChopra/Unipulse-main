@@ -1,4 +1,4 @@
-const CACHE = "unifix-shell-v3";
+const CACHE = "unifix-shell-v4";
 // Precache only assets that are public and never redirect — a single failed or
 // redirected (login-gated) request would abort the whole install.
 const SHELL = ["/offline", "/static/css/app.css", "/static/js/report.js",
@@ -22,7 +22,13 @@ self.addEventListener("fetch", (e) => {
   const req = e.request;
   if (req.method !== "GET") return;
   const url = new URL(req.url);
-  if (url.pathname.endsWith("/data") || url.pathname.startsWith("/report/")
+  // Network-first, never-cache for auth-gated / always-live surfaces. The admin
+  // portal is dynamic and session-scoped: a stale or login-redirected copy in
+  // the cache must never be replayed (that is what makes an installed PWA show
+  // "no access" after the session changes).
+  if (url.pathname === "/login" || url.pathname === "/logout"
+      || url.pathname.startsWith("/admin")
+      || url.pathname.endsWith("/data") || url.pathname.startsWith("/report/")
       || url.pathname.startsWith("/photo/")) {
     e.respondWith(fetch(req).catch(() => caches.match(req)));
     return;

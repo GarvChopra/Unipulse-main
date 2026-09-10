@@ -7,15 +7,16 @@ import time as _time
 from flask import Blueprint, Response, abort, g, redirect, render_template, request
 
 from db import audit, evidence, grievances, locations, notices, recurring, timeline, users
-from domain.constants import (CATEGORIES, LOCATION_TYPES, RESPONSIBLE_UNITS_FLAT,
-                              ROOM_TYPES, STATUS_TRANSITIONS, STATUSES)
+from domain.constants import (CATEGORIES, LOCATION_TYPES, RESPONSIBLE_UNITS,
+                              RESPONSIBLE_UNITS_FLAT, ROOM_TYPES, SLA_HOURS,
+                              STATUS_TRANSITIONS, STATUSES)
 from domain.rbac import (ANALYTICS_VIEW, AUDIT_VIEW, GRIEVANCE_ASSIGN,
                          GRIEVANCE_CHANGE_STATUS, GRIEVANCE_CLOSE,
                          GRIEVANCE_CORRECT_CATEGORY, GRIEVANCE_VERIFY,
                          GRIEVANCE_VERIFY_RESOLUTION, LOCATION_MANAGE, NOTICE_MANAGE,
                          USER_MANAGE, has_permission, require_permission)
-from services import grievance_service, intelligence_service
-from services.auth_service import hash_pin
+from services import dashboard_service, grievance_service, intelligence_service
+from services.auth_service import hash_pin, verify_pin
 
 bp = Blueprint("admin", __name__, url_prefix="/admin",
                template_folder="../../templates")
@@ -37,6 +38,25 @@ def _guard():
         return redirect("/login")
     if g.current_user["role"] != "admin":
         abort(403)
+
+
+@bp.context_processor
+def _admin_shell_context():
+    """Data every admin page's chrome needs: the top-bar notification list and
+    the small nav badges. `alerts()` is cached ~60s so this stays cheap."""
+    try:
+        items = dashboard_service.alerts()
+    except Exception:                     # noqa: BLE001 - chrome must never 500
+        items = []
+    by_href = {it["href"]: it["count"] for it in items}
+    badges = {}
+    if by_href.get("/admin/grievances?sort=due"):
+        badges["/admin/grievances"] = {"n": by_href["/admin/grievances?sort=due"], "muted": False}
+    if by_href.get("/admin/users"):
+        badges["/admin/users"] = {"n": by_href["/admin/users"], "muted": False}
+    if by_href.get("/admin/recurring"):
+        badges["/admin/recurring"] = {"n": by_href["/admin/recurring"], "muted": True}
+    return {"ax_alerts": items, "ax_nav_badges": badges}
 
 
 def _actor():
@@ -63,14 +83,38 @@ def more_page():
 
 @bp.get("/", strict_slashes=False)
 def dashboard():
+    rng = dashboard_service.resolve_range(request.args.get("range"))
+    return render_template("admin/dashboard.html", d=dashboard_service.overview(rng))
+
+
+@bp.get("/settings")
+def settings_page():
+    from db import pool
     return render_template(
-        "admin/dashboard.html",
-        kpis=intelligence_service.kpis(),
-        pulse=intelligence_service.pulse(),
-        overdue=intelligence_service.overdue(8),
-        recurring=recurring.list_active()[:5],
-        activity=audit.list_recent(10),
+        "admin/settings.html",
+        me=g.current_user,
+        sla=SLA_HOURS,
+        categories=CATEGORIES,
+        units=RESPONSIBLE_UNITS,
+        location_types=LOCATION_TYPES,
+        db_mode=pool.STATE["mode"],
+        ok=request.args.get("ok"),
+        err=request.args.get("err"),
     )
+
+
+@bp.post("/settings/pin")
+def settings_pin():
+    u = users.get_by_username(_actor())
+    cur = (request.form.get("current") or "").strip()
+    new = (request.form.get("new") or "").strip()
+    if not verify_pin(cur, u["pin_hash"]):
+        return redirect("/admin/settings?err=Current+PIN+is+incorrect")
+    if not (new.isdigit() and 4 <= len(new) <= 8):
+        return redirect("/admin/settings?err=New+PIN+must+be+4-8+digits")
+    users.set_pin(u["id"], hash_pin(new))
+    audit.add(u["username"], "user.self_pin", target_type="user", target_id=u["id"])
+    return redirect("/admin/settings?ok=1")
 
 
 # ── queue ──────────────────────────────────────────────────────────────────

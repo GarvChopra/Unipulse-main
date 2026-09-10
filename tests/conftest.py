@@ -22,10 +22,12 @@ for _k in ("DATABASE_URL", "GROQ_API_KEY", "RESEND_API_KEY", "IMAGEKIT_PRIVATE_K
 def _reset_process_state():
     """Clear module-level caches that would otherwise leak between tests."""
     from db import pool
-    from services import auth_service
+    from services import auth_service, dashboard_service
     auth_service._ATTEMPTS.clear()
+    dashboard_service._ALERT_CACHE.update(t=0.0, v=[])
     yield
     auth_service._ATTEMPTS.clear()
+    dashboard_service._ALERT_CACHE.update(t=0.0, v=[])
     pool.reset_memory_store()
 
 

@@ -146,10 +146,13 @@ def test_pulse_and_gaps_pages(client):
     assert client.get("/admin/gaps").status_code == 200
 
 
-def test_dashboard_shows_pulse_strip(client):
+def test_dashboard_shows_core_sections(client):
     _admin(client)
     r = client.get("/admin")
-    assert b"Infrastructure Pulse" in r.data
+    assert b"Campus Overview" in r.data
+    assert b"Quick actions" in r.data
+    assert b"Overdue issues" in r.data
+    assert b"Active recurring issues" in r.data
 
 
 def test_faculty_blocked_from_pulse(client):
@@ -162,4 +165,5 @@ def test_admin_more_page(client):
     r = client.get("/admin/more")
     assert r.status_code == 200
     assert b"Analytics" in r.data and b"Audit Log" in r.data
-    assert b"admin-bottomnav" in r.data
+    # mobile navigation is now the slide-in drawer, not a bottom bar
+    assert b"ax-burger" in r.data and b'id="axSide"' in r.data
