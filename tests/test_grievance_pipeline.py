@@ -32,6 +32,16 @@ def test_happy_path_creates_grievance_evidence_timeline(memstore):
     assert [e["event_type"] for e in timeline.list_for(g["id"])] == ["created"]
 
 
+def test_report_without_photo_is_accepted(memstore):
+    u = users.create("f3", "Faculty Three", "reporter", hash_pin("1"))
+    out = gs.submit(_sub(u["id"], photo_b64=None, photo_mime="image/jpeg"))
+    g = grievances.get_by_code(out["code"])
+    assert g["status"] == "reported"
+    assert g["primary_photo_url"] is None
+    assert evidence.list_for(g["id"]) == []
+    assert [e["event_type"] for e in timeline.list_for(g["id"])] == ["created"]
+
+
 def test_validation_error_raises(memstore):
     u = users.create("f2", "F2", "reporter", hash_pin("1"))
     with pytest.raises(gs.SubmissionError) as ei:

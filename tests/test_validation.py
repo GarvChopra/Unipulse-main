@@ -15,9 +15,9 @@ def test_description_too_short():
     assert any("10 characters" in e for e in validate_submission(s))
 
 
-def test_missing_photo():
+def test_photo_is_optional():
     s = dict(_OK); s.pop("photo_b64")
-    assert any("photo" in e.lower() for e in validate_submission(s))
+    assert validate_submission(s) == []
 
 
 def test_bad_location_type():

@@ -33,7 +33,7 @@ def test_get_app_page_is_public_and_has_install_action(client):
     assert r.status_code == 200
     assert b"beforeinstallprompt" in r.data
     assert b"Android app coming soon" in r.data
-    assert b"install instantly" in r.data.lower()
+    assert b"instant download" in r.data.lower()
 
 
 def test_home_page_has_no_floating_install_button(client):

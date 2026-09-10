@@ -21,8 +21,8 @@ def validate_submission(sub: dict) -> list[str]:
     if not (sub.get("location_label") or "").strip():
         errors.append("Location is required.")
 
-    if not (sub.get("photo_b64") or "").strip():
-        errors.append("A photo of the problem is required.")
+    # A photo is encouraged but optional — the reporter can fill in the form
+    # without one (the wizard offers a "No photo?" skip on the photo step).
 
     cat = sub.get("category")
     if cat and cat not in CATEGORIES:

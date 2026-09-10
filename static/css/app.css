@@ -153,6 +153,9 @@ button:active{filter:brightness(.96)}
 .cam-launch p{margin:16px 0 4px;font-weight:700;color:var(--navy)}
 .cam-launch .gallery{margin-top:10px;font-weight:700;color:var(--green)}
 .cam-hint{text-align:center;color:var(--muted);font-size:12.5px;margin-top:14px}
+.cam-launch .skip-photo{display:block;margin:16px auto 0;border:0;background:transparent;padding:4px;
+  font:inherit;font-size:13px;font-weight:700;color:var(--muted);text-decoration:underline;cursor:pointer}
+.cam-launch .skip-photo:active{color:var(--navy)}
 .cam-live{position:relative;background:#0c1524;border-radius:var(--r);overflow:hidden;aspect-ratio:3/4;
   display:grid;place-items:center;margin-bottom:12px}
 .cam-live video{width:100%;height:100%;object-fit:cover}

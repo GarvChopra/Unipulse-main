@@ -93,6 +93,12 @@
     if (!S.photo_b64) return alert("Please add a photo first.");
     show("loc");
   });
+  // photo is optional — let the reporter skip straight to the form
+  $("skip-photo").addEventListener("click", () => {
+    S.photo_b64 = null; S.photo_mime = "image/jpeg";
+    stopCam();
+    show("loc");
+  });
 
   // ---- 2. location — cascading picker driven by the campus tree ----
   const drill = $("drill");
@@ -250,6 +256,7 @@
     $("r-pri").innerHTML = `<span class="badge-pri ${S.severity}">${S.severity}</span>`;
     $("r-desc").textContent = S.description;
     if (nv) $("r-when").textContent = new Date(nv).toLocaleString();
+    $("preview2").hidden = !S.photo_b64;
     show("review");
 
     try {

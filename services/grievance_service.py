@@ -67,9 +67,10 @@ def submit(sub: dict) -> dict:
             "The admin can see it - no need to report it again."
         ])
 
-    # 4. store photo
-    photo_url = storage_service.upload_image(sub.get("photo_b64") or "",
-                                             sub.get("photo_mime", "image/jpeg"))
+    # 4. store photo (optional — the reporter may submit without one)
+    photo_b64 = (sub.get("photo_b64") or "").strip()
+    photo_url = (storage_service.upload_image(photo_b64, sub.get("photo_mime", "image/jpeg"))
+                 if photo_b64 else None)
 
     # 5. insert grievance
     g_seed = {
@@ -95,10 +96,11 @@ def submit(sub: dict) -> dict:
     )
 
     # 6. report-photo evidence + backfill the served URL onto the grievance
-    ev = evidence.add(g["id"], "report", image_url=photo_url,
-                      thumbnail_url=photo_url, uploaded_by=reporter_name)
-    served = f"/photo/{ev['id']}"
-    grievances.update(g["id"], primary_photo_url=served, thumbnail_url=served)
+    if photo_url:
+        ev = evidence.add(g["id"], "report", image_url=photo_url,
+                          thumbnail_url=photo_url, uploaded_by=reporter_name)
+        served = f"/photo/{ev['id']}"
+        grievances.update(g["id"], primary_photo_url=served, thumbnail_url=served)
 
     timeline.add(g["id"], "created", actor=reporter_name, actor_role="reporter",
                  note=f"Reported via {cls.get('source', 'form')}")
