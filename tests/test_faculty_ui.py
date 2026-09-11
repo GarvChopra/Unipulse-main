@@ -56,7 +56,7 @@ def test_report_form_has_category_and_review_step(client):
     assert b">Review<" in html and b"Use Photo" in html
 
 
-def test_submit_with_form_priority_and_fields(client):
+def test_submit_ignores_client_severity_and_persists_fields(client):
     _login(client)
     r = client.post("/report", json={
         "description": "The tube light in this room is flickering badly since two days",
@@ -66,7 +66,9 @@ def test_submit_with_form_priority_and_fields(client):
     assert r.status_code == 200
     from db import grievances
     g = grievances.get_by_code(r.get_json()["code"])
-    assert g["severity"] == "high"
+    # no severity keyword in the description -> AI/keyword classifier picks
+    # "medium", regardless of the (ignored) client-sent "high".
+    assert g["severity"] == "medium"
     assert g["affects_academics"] is True
     assert g["noticed_at"] == 1724990000.0
 

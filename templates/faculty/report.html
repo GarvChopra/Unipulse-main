@@ -57,13 +57,6 @@
       {% for c in categories %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
     </select>
 
-    <label>Priority</label>
-    <div class="pri-pills" id="pri">
-      <button type="button" data-v="low" aria-pressed="false">Low</button>
-      <button type="button" data-v="medium" aria-pressed="false">Medium</button>
-      <button type="button" data-v="high" aria-pressed="false">High</button>
-    </div>
-
     <label for="desc">What happened?</label>
     <textarea id="desc" maxlength="300" rows="4"
       placeholder="e.g. The tube light in Room 204 is flickering and one side is not working."></textarea>

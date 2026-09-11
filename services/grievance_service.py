@@ -50,10 +50,10 @@ def submit(sub: dict) -> dict:
             photo_mime=sub.get("photo_mime", "image/jpeg"),
         )
 
-    # the faculty's picks win over the AI/keyword guess when provided
-    from domain.constants import SEVERITIES
-    form_sev = sub.get("severity")
-    severity = form_sev if form_sev in SEVERITIES else cls["severity"]
+    # Severity is always AI-decided (Groq, falling back to keyword scoring) -
+    # reporters never choose it. The faculty's category pick still wins over
+    # the AI/keyword guess when provided.
+    severity = cls["severity"]
     form_cat = sub.get("category")
     category = form_cat if form_cat in CATEGORIES else cls["category"]
     affects = bool(sub.get("affects_academics"))

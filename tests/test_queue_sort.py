@@ -6,12 +6,12 @@ from db import grievances as gdb
 from services import grievance_service as gs
 
 
-def _report(client, user, desc, created_at=None, severity="low"):
+def _report(client, user, desc, created_at=None):
     c = client.application.test_client()
     c.post("/login", data={"username": user, "pin": "1234"})
     out = c.post("/report", json={
         "description": desc, "location_type": "hostels", "location_label": "Hostels",
-        "photo_b64": "aGVsbG8=", "photo_mime": "image/jpeg", "severity": severity}).get_json()
+        "photo_b64": "aGVsbG8=", "photo_mime": "image/jpeg"}).get_json()
     g = gdb.get_by_code(out["code"])
     if created_at is not None:
         gdb.update(g["id"], created_at=created_at)
@@ -20,18 +20,20 @@ def _report(client, user, desc, created_at=None, severity="low"):
 
 def test_newest_sort_puts_the_latest_report_first(client):
     now = time.time()
+    # Severity is AI/keyword-decided (not form-supplied), so the wording
+    # itself is what drives "high" vs "low" here.
     old_code, _ = _report(client, "prof.rao",
-                           "An old low-priority issue reported a while ago here",
-                           created_at=now - 10 * 86400, severity="high")
+                           "An old dangerous exposed wire issue reported a while ago here",
+                           created_at=now - 10 * 86400)
     new_code, _ = _report(client, "dr.iyer",
-                          "A brand new issue just reported right now on this floor",
-                          created_at=now, severity="low")
+                          "A brand new minor cosmetic issue just reported right now here",
+                          created_at=now)
 
     client.post("/login", data={"username": "admin", "pin": "0000"})
     rows = client.get("/admin/grievances/data?sort=created").get_json()["rows"]
     assert rows[0]["code"] == new_code, [r["code"] for r in rows]
 
-    # priority sort still leads with the high-severity/aged one
+    # priority sort still leads with the high-severity one
     rows_p = client.get("/admin/grievances/data?sort=priority").get_json()["rows"]
     assert rows_p[0]["code"] == old_code
 

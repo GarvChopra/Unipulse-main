@@ -3,7 +3,7 @@
   const picker = JSON.parse(wiz.dataset.picker);   // {campus, nodes:[{id,name,type,bucket,room_type,children}]}
   const S = { photo_b64: null, photo_mime: "image/jpeg",
              location_id: null, room: null, sub_zone: null, path: [],
-             category: "", description: "", severity: null,
+             category: "", description: "",
              noticed_at: null, affects_academics: false, ai: null };
   let stream = null;
   const $ = (id) => document.getElementById(id);
@@ -224,13 +224,6 @@
   }
 
   $("cat").addEventListener("change", (e) => (S.category = e.target.value));
-  $("pri").querySelectorAll("button").forEach((b) => {
-    b.onclick = () => {
-      $("pri").querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", "false"));
-      b.setAttribute("aria-pressed", "true");
-      S.severity = b.dataset.v;
-    };
-  });
   $("desc").addEventListener("input", (e) => {
     S.description = e.target.value;
     $("cc").textContent = e.target.value.length;
@@ -244,7 +237,6 @@
     if (topNode && topNode.type === "building" && !S.room &&
         !(findNodeById(S.location_id) || {}).room_type)
       return alert("Pick the floor and room (or type the room number).");
-    if (!S.severity) return alert("Pick a priority.");
     if (S.description.length < 10) return alert("Describe what happened (min 10 characters).");
 
     const nv = $("noticed").value;
@@ -253,7 +245,7 @@
 
     $("r-loc").textContent = readablePath() || "—";
     $("r-cat").textContent = S.category || "Auto-detect";
-    $("r-pri").innerHTML = `<span class="badge-pri ${S.severity}">${S.severity}</span>`;
+    $("r-pri").textContent = "Detecting…";
     $("r-desc").textContent = S.description;
     if (nv) $("r-when").textContent = new Date(nv).toLocaleString();
     $("preview2").hidden = !S.photo_b64;
@@ -267,7 +259,14 @@
       })).json();
       S.ai = a;
       if (!S.category && a.category) $("r-cat").textContent = a.category + " (auto)";
-    } catch (e) { S.ai = null; }
+      if (a.severity)
+        $("r-pri").innerHTML = `<span class="badge-pri ${a.severity}">${a.severity}</span> (AI-detected)`;
+      else
+        $("r-pri").textContent = "Decided by AI on submit";
+    } catch (e) {
+      S.ai = null;
+      $("r-pri").textContent = "Decided by AI on submit";
+    }
   });
 
   // ---- submit ----
@@ -280,7 +279,7 @@
           description: S.description, location_id: S.location_id,
           room: S.room, sub_zone: S.sub_zone,
           photo_b64: S.photo_b64, photo_mime: S.photo_mime,
-          category: S.category || null, severity: S.severity,
+          category: S.category || null,
           noticed_at: S.noticed_at, affects_academics: S.affects_academics, ai: S.ai,
         }),
       });

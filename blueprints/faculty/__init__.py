@@ -172,7 +172,6 @@ def report_submit():
         **loc,
         "photo_b64": d.get("photo_b64"), "photo_mime": d.get("photo_mime", "image/jpeg"),
         "category": d.get("category"),
-        "severity": d.get("severity"),
         "noticed_at": d.get("noticed_at"),
         "affects_academics": bool(d.get("affects_academics")),
         "ai": d.get("ai"),

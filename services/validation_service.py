@@ -1,7 +1,7 @@
 """Inbound grievance submission validation. Pure - no I/O."""
 from __future__ import annotations
 
-from domain.constants import CATEGORIES, LOCATION_TYPES, SEVERITIES
+from domain.constants import CATEGORIES, LOCATION_TYPES
 
 _VALID_TYPES = {t["key"] for t in LOCATION_TYPES}
 _DESC_MIN, _DESC_MAX = 10, 300
@@ -27,8 +27,5 @@ def validate_submission(sub: dict) -> list[str]:
     cat = sub.get("category")
     if cat and cat not in CATEGORIES:
         errors.append(f"Unknown category {cat!r}.")
-    sev = sub.get("severity")
-    if sev and sev not in SEVERITIES:
-        errors.append(f"Unknown severity {sev!r}.")
 
     return errors

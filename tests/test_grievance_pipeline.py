@@ -89,11 +89,13 @@ def test_spam_flag_persisted(memstore):
     assert grievances.get_by_code(out["code"])["spam_flag"] is True
 
 
-def test_form_severity_overrides_ai(memstore):
+def test_form_severity_is_ignored_ai_decides(memstore):
+    # Reporters cannot pick severity - even if a client sends one, the
+    # AI/keyword classifier's judgment is what gets stored.
     u = users.create("fs", "FS", "reporter", hash_pin("1"))
     out = gs.submit(_sub(u["id"], description="minor cosmetic paint chip on the wall",
                          severity="high"))
-    assert grievances.get_by_code(out["code"])["severity"] == "high"
+    assert grievances.get_by_code(out["code"])["severity"] == "low"
 
 
 def test_affects_academics_bumps_priority_and_persists(memstore):
